@@ -1,0 +1,50 @@
+{
+  "name": "n8n-nodes-supergreen",
+  "version": "0.1.0",
+  "description": "n8n community node for Supergreen - Headless WhatsApp & Telegram automation API",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "supergreen",
+    "whatsapp",
+    "telegram",
+    "automation",
+    "headless whatsapp",
+    "wppconnect"
+  ],
+  "license": "MIT",
+  "homepage": "https://supergreen.cc",
+  "author": {
+    "name": "Uri Valevski",
+    "email": "uri@uriv.me",
+    "url": "https://uriv.me"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uriva/n8n-nodes-supergreen.git"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/SupergreenApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Supergreen/Supergreen.node.js",
+      "dist/nodes/Supergreen/SupergreenTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "n8n-workflow": "^2.16.0",
+    "typescript": "^5.9.0"
+  }
+}
