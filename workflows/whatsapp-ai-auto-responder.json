@@ -1,0 +1,67 @@
+{
+  "name": "WhatsApp AI Auto-Responder with Supergreen",
+  "nodes": [
+    {
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "message"
+        ],
+        "onlyIncoming": true
+      },
+      "id": "1",
+      "name": "Supergreen Trigger",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "1",
+          "name": "Supergreen Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.chat.id }}",
+        "message": "=Thanks for your message: \"{{ $json.text }}\". An automated reply from n8n + Supergreen."
+      },
+      "id": "2",
+      "name": "Supergreen Send Reply",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "1",
+          "name": "Supergreen Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Supergreen Trigger": {
+      "main": [
+        [
+          {
+            "node": "Supergreen Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

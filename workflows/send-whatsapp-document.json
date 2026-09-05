@@ -1,0 +1,65 @@
+{
+  "name": "Send Document or PDF via WhatsApp with Supergreen",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-invoice",
+        "responseMode": "onReceived"
+      },
+      "id": "1",
+      "name": "Incoming Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "sendMedia",
+        "toNumber": "={{ $json.body.recipientPhone }}",
+        "type": "document",
+        "mediaSource": "url",
+        "mediaUrl": "={{ $json.body.fileUrl }}",
+        "additionalFields": {
+          "caption": "={{ $json.body.caption || 'Here is your document.' }}",
+          "filename": "={{ $json.body.filename || 'document.pdf' }}"
+        }
+      },
+      "id": "2",
+      "name": "Supergreen Send PDF",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "1",
+          "name": "Supergreen Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Incoming Webhook": {
+      "main": [
+        [
+          {
+            "node": "Supergreen Send PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
