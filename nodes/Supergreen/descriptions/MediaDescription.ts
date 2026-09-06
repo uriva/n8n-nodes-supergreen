@@ -80,7 +80,7 @@ export const mediaFields: INodeProperties[] = [
         description: 'Use a file passed from a previous node (e.g. HTTP Request, Read File)',
       },
       {
-        name: 'Download from URL',
+        name: 'Download From URL',
         value: 'url',
         description: 'Download media from a public URL and send it',
       },

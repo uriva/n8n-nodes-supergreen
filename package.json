@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-supergreen",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "n8n community node for Supergreen - Headless WhatsApp & Telegram automation API",
   "keywords": [
     "n8n-community-node-package",
@@ -42,7 +42,11 @@
       "dist/nodes/Supergreen/SupergreenTrigger.node.js"
     ]
   },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
   "devDependencies": {
+    "@n8n/scan-community-package": "^0.34.0",
     "@types/node": "^26.4.1",
     "n8n-workflow": "^2.16.0",
     "typescript": "^5.9.0"

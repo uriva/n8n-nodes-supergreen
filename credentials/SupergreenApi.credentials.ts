@@ -1,5 +1,8 @@
 import {
+  IAuthenticate,
+  ICredentialTestRequest,
   ICredentialType,
+  Icon,
   INodeProperties,
 } from 'n8n-workflow';
 
@@ -7,6 +10,7 @@ export class SupergreenApi implements ICredentialType {
   name = 'supergreenApi';
   displayName = 'Supergreen API';
   documentationUrl = 'https://supergreen.cc';
+  icon: Icon = { light: 'file:supergreen.svg', dark: 'file:supergreen.dark.svg' };
   properties: INodeProperties[] = [
     {
       displayName: 'Base URL',
@@ -36,4 +40,24 @@ export class SupergreenApi implements ICredentialType {
       description: 'Default sender WhatsApp/Telegram phone number (country code + number without plus or dashes)',
     },
   ];
+
+  authenticate: IAuthenticate = {
+    type: 'generic',
+    properties: {},
+  };
+
+  test: ICredentialTestRequest = {
+    request: {
+      baseURL: '={{$credentials?.baseUrl}}',
+      url: '/',
+      method: 'POST',
+      body: {
+        endpoint: 'reconnect',
+        payload: {
+          number: '={{$credentials?.defaultPhoneNumber}}',
+          token: '={{$credentials?.apiToken}}',
+        },
+      },
+    },
+  };
 }

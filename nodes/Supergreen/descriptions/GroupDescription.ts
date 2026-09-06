@@ -13,10 +13,10 @@ export const groupOperations: INodeProperties[] = [
     },
     options: [
       {
-        name: 'Get Many',
-        value: 'getAll',
-        description: 'Get all WhatsApp groups the account belongs to',
-        action: 'Get all groups',
+        name: 'Add Participant',
+        value: 'addParticipant',
+        description: 'Add a user to a group (must be group admin)',
+        action: 'Add a participant',
       },
       {
         name: 'Get Details',
@@ -25,28 +25,28 @@ export const groupOperations: INodeProperties[] = [
         action: 'Get group details',
       },
       {
-        name: 'Get Members',
-        value: 'getMembers',
-        description: 'List all participants in a group',
-        action: 'Get group members',
-      },
-      {
         name: 'Get Invite Link',
         value: 'getInviteLink',
         description: 'Get the invite link for a group (must be group admin)',
         action: 'Get group invite link',
       },
       {
+        name: 'Get Many',
+        value: 'getAll',
+        description: 'Get many WhatsApp groups the account belongs to',
+        action: 'Get many groups',
+      },
+      {
+        name: 'Get Members',
+        value: 'getMembers',
+        description: 'List all participants in a group',
+        action: 'Get group members',
+      },
+      {
         name: 'Join Group',
         value: 'join',
         description: 'Join a WhatsApp group using an invite link or code',
         action: 'Join a group',
-      },
-      {
-        name: 'Add Participant',
-        value: 'addParticipant',
-        description: 'Add a user to a group (must be group admin)',
-        action: 'Add a participant',
       },
       {
         name: 'Remove Participant',

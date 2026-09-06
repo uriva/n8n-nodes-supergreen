@@ -4,6 +4,7 @@ import {
   INodeExecutionData,
   INodeType,
   INodeTypeDescription,
+  NodeConnectionTypes,
   NodeOperationError,
 } from 'n8n-workflow';
 
@@ -21,20 +22,49 @@ import { reactionFields, reactionOperations } from './descriptions/ReactionDescr
 import { groupFields, groupOperations } from './descriptions/GroupDescription';
 import { telegramFields, telegramOperations } from './descriptions/TelegramDescription';
 
+async function fetchUrlAsBase64(helpers: IExecuteFunctions['helpers'], url: string): Promise<string> {
+  const fileResponse = await helpers.httpRequest({
+    method: 'GET',
+    url,
+    encoding: 'arraybuffer',
+  });
+  return Buffer.from(fileResponse).toString('base64');
+}
+
+async function getEffectiveSender(
+  thisNode: IExecuteFunctions,
+  paramName: string,
+  itemIndex: number,
+): Promise<string> {
+  const raw = thisNode.getNodeParameter(paramName, itemIndex, '') as string;
+  if (raw) return normalizePhoneNumber(raw);
+  const creds = (await thisNode.getCredentials('supergreenApi')) as unknown as ISupergreenCredentials;
+  const num = creds.defaultPhoneNumber || '';
+  if (!num) {
+    throw new NodeOperationError(
+      thisNode.getNode(),
+      'Sender phone number is required. Provide it in the node or set a default in Supergreen credentials.',
+      { itemIndex },
+    );
+  }
+  return normalizePhoneNumber(num);
+}
+
 export class Supergreen implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Supergreen',
     name: 'supergreen',
-    icon: 'file:supergreen.svg',
+    icon: { light: 'file:supergreen.svg', dark: 'file:supergreen.dark.svg' },
     group: ['transform'],
     version: 1,
+    usableAsTool: true,
     subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
     description: 'Automate WhatsApp and Telegram with Supergreen API',
     defaults: {
       name: 'Supergreen',
     },
-    inputs: ['main'],
-    outputs: ['main'],
+    inputs: [NodeConnectionTypes.Main],
+    outputs: [NodeConnectionTypes.Main],
     credentials: [
       {
         name: 'supergreenApi',
@@ -49,14 +79,19 @@ export class Supergreen implements INodeType {
         noDataExpression: true,
         options: [
           {
-            name: 'Message',
-            value: 'message',
-            description: 'Send, edit, or delete WhatsApp text messages',
+            name: 'Group',
+            value: 'group',
+            description: 'Manage WhatsApp groups, members, and invite links',
           },
           {
             name: 'Media',
             value: 'media',
             description: 'Send images, videos, documents, or audio files over WhatsApp',
+          },
+          {
+            name: 'Message',
+            value: 'message',
+            description: 'Send, edit, or delete WhatsApp text messages',
           },
           {
             name: 'Poll',
@@ -67,11 +102,6 @@ export class Supergreen implements INodeType {
             name: 'Reaction',
             value: 'reaction',
             description: 'React to WhatsApp messages with emojis',
-          },
-          {
-            name: 'Group',
-            value: 'group',
-            description: 'Manage WhatsApp groups, members, and invite links',
           },
           {
             name: 'Telegram',
@@ -99,7 +129,6 @@ export class Supergreen implements INodeType {
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const returnData: INodeExecutionData[] = [];
-    const credentials = (await this.getCredentials('supergreenApi')) as unknown as ISupergreenCredentials;
 
     for (let i = 0; i < items.length; i++) {
       try {
@@ -108,22 +137,8 @@ export class Supergreen implements INodeType {
 
         let responseData: any;
 
-        // Resolve default phone number if applicable
-        const getEffectiveSender = (paramName: string): string => {
-          const raw = this.getNodeParameter(paramName, i, '') as string;
-          const num = raw || credentials.defaultPhoneNumber || '';
-          if (!num) {
-            throw new NodeOperationError(
-              this.getNode(),
-              `Sender phone number is required. Provide it in the node or set a default in Supergreen credentials.`,
-              { itemIndex: i },
-            );
-          }
-          return normalizePhoneNumber(num);
-        };
-
         if (resource === 'message') {
-          const fromNumber = getEffectiveSender('fromNumber');
+          const fromNumber = await getEffectiveSender(this, 'fromNumber', i);
           const rawTo = this.getNodeParameter('toNumber', i) as string;
           const toNumber = normalizeWhatsAppNumber(rawTo);
 
@@ -188,7 +203,7 @@ export class Supergreen implements INodeType {
             );
           }
         } else if (resource === 'media') {
-          const fromNumber = getEffectiveSender('fromNumber');
+          const fromNumber = await getEffectiveSender(this, 'fromNumber', i);
           const rawTo = this.getNodeParameter('toNumber', i) as string;
           const toNumber = normalizeWhatsAppNumber(rawTo);
           const type = this.getNodeParameter('type', i) as string;
@@ -208,12 +223,7 @@ export class Supergreen implements INodeType {
             if (!filename) filename = binaryData.fileName;
           } else if (mediaSource === 'url') {
             const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
-            const fileResponse = await this.helpers.httpRequest({
-              method: 'GET',
-              url: mediaUrl,
-              encoding: 'arraybuffer',
-            });
-            base64 = Buffer.from(fileResponse).toString('base64');
+            base64 = await fetchUrlAsBase64(this.helpers, mediaUrl);
             if (!filename) {
               try {
                 const urlObj = new URL(mediaUrl);
@@ -242,7 +252,7 @@ export class Supergreen implements INodeType {
             i,
           );
         } else if (resource === 'poll') {
-          const fromNumber = getEffectiveSender('fromNumber');
+          const fromNumber = await getEffectiveSender(this, 'fromNumber', i);
           const rawTo = this.getNodeParameter('toNumber', i) as string;
           const toNumber = normalizeWhatsAppNumber(rawTo);
           const name = this.getNodeParameter('name', i) as string;
@@ -273,7 +283,7 @@ export class Supergreen implements INodeType {
             i,
           );
         } else if (resource === 'reaction') {
-          const fromNumber = getEffectiveSender('fromNumber');
+          const fromNumber = await getEffectiveSender(this, 'fromNumber', i);
           const rawTo = this.getNodeParameter('toNumber', i) as string;
           const toNumber = normalizeWhatsAppNumber(rawTo);
           const messageId = this.getNodeParameter('messageId', i) as string;
@@ -291,7 +301,7 @@ export class Supergreen implements INodeType {
             i,
           );
         } else if (resource === 'group') {
-          const fromNumber = getEffectiveSender('fromNumber');
+          const fromNumber = await getEffectiveSender(this, 'fromNumber', i);
 
           if (operation === 'getAll') {
             responseData = await supergreenApiRequest.call(
@@ -353,7 +363,7 @@ export class Supergreen implements INodeType {
             );
           }
         } else if (resource === 'telegram') {
-          const phoneNumber = getEffectiveSender('phoneNumber');
+          const phoneNumber = await getEffectiveSender(this, 'phoneNumber', i);
 
           if (operation === 'sendMessage') {
             const chatId = this.getNodeParameter('chatId', i) as string;
@@ -403,7 +413,9 @@ export class Supergreen implements INodeType {
           });
           continue;
         }
-        throw error;
+        throw new NodeOperationError(this.getNode(), error.message || 'Operation failed', {
+          itemIndex: i,
+        });
       }
     }
 

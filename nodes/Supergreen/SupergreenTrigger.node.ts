@@ -5,6 +5,7 @@ import {
   INodeTypeDescription,
   IWebhookFunctions,
   IWebhookResponseData,
+  NodeConnectionTypes,
 } from 'n8n-workflow';
 
 import {
@@ -17,15 +18,16 @@ export class SupergreenTrigger implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Supergreen Trigger',
     name: 'supergreenTrigger',
-    icon: 'file:supergreen.svg',
+    icon: { light: 'file:supergreen.svg', dark: 'file:supergreen.dark.svg' },
     group: ['trigger'],
     version: 1,
+    subtitle: '={{$parameter["network"]}}',
     description: 'Listen to incoming WhatsApp and Telegram messages, reactions, and events from Supergreen',
     defaults: {
       name: 'Supergreen Trigger',
     },
     inputs: [],
-    outputs: ['main'],
+    outputs: [NodeConnectionTypes.Main],
     credentials: [
       {
         name: 'supergreenApi',
@@ -66,15 +68,15 @@ export class SupergreenTrigger implements INodeType {
         name: 'events',
         type: 'multiOptions',
         options: [
-          { name: 'Message Received', value: 'message', description: 'New incoming or outgoing message' },
-          { name: 'Message Edited', value: 'edit', description: 'Existing message edited' },
-          { name: 'Message Deleted', value: 'delete', description: 'Message deleted for everyone' },
-          { name: 'Reaction Added', value: 'reaction', description: 'Emoji reaction to a message' },
-          { name: 'Poll Vote', value: 'vote', description: 'Vote cast on a poll' },
-          { name: 'Participant Joined Group', value: 'participant_joined', description: 'New member joined group' },
+          { name: 'Account Banned', value: 'banned', description: 'Account banned by platform' },
           { name: 'Account Connected', value: 'connected', description: 'Account session successfully established' },
           { name: 'Account Disconnected', value: 'disconnected', description: 'Account lost connection' },
-          { name: 'Account Banned', value: 'banned', description: 'Account banned by platform' },
+          { name: 'Message Deleted', value: 'delete', description: 'Message deleted for everyone' },
+          { name: 'Message Edited', value: 'edit', description: 'Existing message edited' },
+          { name: 'Message Received', value: 'message', description: 'New incoming or outgoing message' },
+          { name: 'Participant Joined Group', value: 'participant_joined', description: 'New member joined group' },
+          { name: 'Poll Vote', value: 'vote', description: 'Vote cast on a poll' },
+          { name: 'Reaction Added', value: 'reaction', description: 'Emoji reaction to a message' },
         ],
         default: ['message'],
         description: 'Select which events should trigger this workflow',
@@ -114,8 +116,9 @@ export class SupergreenTrigger implements INodeType {
           if (network === 'telegram' || network === 'both') {
             await supergreenApiRequest.call(this, 'addTelegramWebhook', { phoneNumber, url: webhookUrl });
           }
-        } catch {
-          // Log and proceed; manual webhook setting remains an option in Supergreen dashboard
+        } catch (error) {
+          this.logger.error('Failed to register webhook on Supergreen', { error });
+          return false;
         }
         return true;
       },
@@ -139,8 +142,9 @@ export class SupergreenTrigger implements INodeType {
           if (network === 'telegram' || network === 'both') {
             await supergreenApiRequest.call(this, 'removeTelegramWebhook', { phoneNumber, url: webhookUrl });
           }
-        } catch {
-          // Ignore cleanup errors on deactivation
+        } catch (error) {
+          this.logger.error('Failed to remove webhook on Supergreen', { error });
+          return false;
         }
         return true;
       },

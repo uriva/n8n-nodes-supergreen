@@ -69,7 +69,11 @@ export async function supergreenApiRequest(
   };
 
   try {
-    const response = await this.helpers.httpRequest(options);
+    const response = await this.helpers.httpRequestWithAuthentication.call(
+      this,
+      'supergreenApi',
+      options,
+    );
 
     if (response && typeof response === 'object') {
       if (response.success === false && response.error) {
@@ -86,9 +90,6 @@ export async function supergreenApiRequest(
 
     return response;
   } catch (error: any) {
-    if (error instanceof NodeOperationError) {
-      throw error;
-    }
     const message = error.response?.data?.error || error.message || 'Unknown Supergreen API Error';
     throw new NodeOperationError(this.getNode(), `Supergreen request failed: ${message}`, {
       itemIndex,

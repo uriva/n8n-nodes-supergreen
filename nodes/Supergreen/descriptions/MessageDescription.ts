@@ -159,7 +159,7 @@ export const messageFields: INodeProperties[] = [
 
   // typing: duration
   {
-    displayName: 'Duration (ms)',
+    displayName: 'Duration (Ms)',
     name: 'duration',
     type: 'number',
     displayOptions: {
