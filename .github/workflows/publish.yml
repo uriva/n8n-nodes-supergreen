@@ -1,9 +1,14 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [created]
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   build-and-publish:
@@ -24,7 +29,7 @@ jobs:
       - name: Build node package
         run: npm run build
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to npm with provenance
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
