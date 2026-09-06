@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      otp:
+        description: 'npm 2FA OTP code (if using token requiring 2FA)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -30,6 +35,11 @@ jobs:
         run: npm run build
 
       - name: Publish to npm with provenance
-        run: npm publish --access public --provenance
+        run: |
+          if [ -n "${{ inputs.otp }}" ]; then
+            npm publish --access public --provenance --otp="${{ inputs.otp }}"
+          else
+            npm publish --access public --provenance
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
