@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-supergreen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "n8n community node for Supergreen - Headless WhatsApp & Telegram automation API",
   "keywords": [
     "n8n-community-node-package",
@@ -16,8 +16,8 @@
   "homepage": "https://supergreen.cc",
   "author": {
     "name": "Uri Valevski",
-    "email": "uri@uriv.me",
-    "url": "https://uriv.me"
+    "email": "uri@supergreen.com",
+    "url": "https://supergreen.cc"
   },
   "repository": {
     "type": "git",
