@@ -66,6 +66,7 @@ npm install n8n-nodes-supergreen
 ## 💡 Example Workflows
 
 ### 1. Inbound WhatsApp AI Responder
+- **Import JSON**: [`workflows/whatsapp-ai-auto-responder.json`](workflows/whatsapp-ai-auto-responder.json) (or 1-click copy on [supergreen.cc/docs](https://supergreen.cc/docs#n8n))
 ```
 [Supergreen Trigger] 
        ↓ (Incoming WhatsApp Message)
@@ -77,6 +78,7 @@ npm install n8n-nodes-supergreen
 - **Supergreen Node**: Action `Send Message`, set `toNumber` to `{{ $json.chat.id }}`, and `message` to the AI's generated response.
 
 ### 2. Send Invoices / PDFs via WhatsApp
+- **Import JSON**: [`workflows/send-whatsapp-document.json`](workflows/send-whatsapp-document.json) (or 1-click copy on [supergreen.cc/docs](https://supergreen.cc/docs#n8n))
 ```
 [Webhook / CRM Trigger]
        ↓
