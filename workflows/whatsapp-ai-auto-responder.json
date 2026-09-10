@@ -3,65 +3,96 @@
   "nodes": [
     {
       "parameters": {
+        "content": "## WhatsApp Auto-Responder with Supergreen\n\n### How it works\n\nThis workflow listens for incoming WhatsApp messages via the Supergreen Trigger node and automatically sends an instant response back to the sender chat using Supergreen. Because Supergreen connects directly via WhatsApp Web sessions behind static proxies, you don't need Meta Business verification or approved message templates.\n\n### Setup steps\n\n- Configure your Supergreen API credentials in n8n (base URL and account secret token from supergreen.cc).\n- Select your connected phone number in the Supergreen Trigger node.\n- Customize the response message or connect an AI model in between the trigger and the reply node.\n- Activate the workflow. The webhook automatically registers with Supergreen to stream incoming messages in real time.\n\n### Customization\n\nInsert an AI Agent node (e.g. OpenAI or Anthropic) or a Code node before the reply step to generate dynamic, contextual answers for customer support or lead qualification.",
+        "width": 480,
+        "height": 752
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -352,
+        144
+      ],
+      "id": "31b2c48e-7e9a-4c22-901d-5a8f0e381bd2",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Listen and Auto-Reply\n\nA compact two-node flow that triggers on incoming WhatsApp messages and sends an immediate response back using Supergreen.",
+        "width": 448,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        144
+      ],
+      "id": "59a721ef-6b21-4f9e-8c33-1d4e680a9bc4",
+      "name": "Sticky Note1"
+    },
+    {
+      "id": "1",
+      "name": "When WhatsApp Message Received",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
         "network": "whatsapp",
         "events": [
           "message"
         ],
         "onlyIncoming": true
       },
-      "id": "1",
-      "name": "Supergreen Trigger",
-      "type": "n8n-nodes-supergreen.supergreenTrigger",
-      "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ],
       "credentials": {
         "supergreenApi": {
           "id": "1",
           "name": "Supergreen Account"
         }
-      }
+      },
+      "typeVersion": 1
     },
     {
+      "id": "2",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "position": [
+        500,
+        300
+      ],
       "parameters": {
         "resource": "message",
         "operation": "send",
         "toNumber": "={{ $json.chat.id }}",
         "message": "=Thanks for your message: \"{{ $json.text }}\". An automated reply from n8n + Supergreen."
       },
-      "id": "2",
-      "name": "Supergreen Send Reply",
-      "type": "n8n-nodes-supergreen.supergreen",
-      "typeVersion": 1,
-      "position": [
-        500,
-        300
-      ],
       "credentials": {
         "supergreenApi": {
           "id": "1",
           "name": "Supergreen Account"
         }
-      }
+      },
+      "typeVersion": 1
     }
   ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
   "connections": {
-    "Supergreen Trigger": {
+    "When WhatsApp Message Received": {
       "main": [
         [
           {
-            "node": "Supergreen Send Reply",
+            "node": "Send WhatsApp Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  },
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
   }
 }
