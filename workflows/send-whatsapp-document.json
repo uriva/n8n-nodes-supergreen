@@ -3,63 +3,94 @@
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "send-invoice",
-        "responseMode": "onReceived"
+        "content": "## Send Document or PDF via WhatsApp with Supergreen\n\n### How it works\n\nThis workflow receives an incoming webhook request and uses the received data to send a document or PDF through WhatsApp using Supergreen. The webhook acts as the entry point, then passes execution directly to the Supergreen node that performs the message delivery.\n\n### Setup steps\n\n- Configure the Incoming Webhook URL in n8n and share it with the system that will trigger PDF or document sends.\n- Set up Supergreen credentials/API access in n8n for the Supergreen Send PDF node.\n- Configure the Supergreen node with the target WhatsApp recipient, document/PDF URL or binary field, filename, and any required message parameters from the webhook payload.\n- Test the webhook with a sample payload to confirm the document is delivered successfully.\n\n### Customization\n\nAdjust the webhook payload mapping in the Supergreen node to support different recipients, document URLs, filenames, captions, or message templates.",
+        "width": 480,
+        "height": 752
       },
-      "id": "1",
-      "name": "Incoming Webhook",
-      "type": "n8n-nodes-base.webhook",
+      "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        250,
-        300
-      ]
+        -352,
+        144
+      ],
+      "id": "4259102c-4bfe-43fc-a833-a28ed7059ce6",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "resource": "media",
-        "operation": "sendMedia",
-        "toNumber": "={{ $json.body.recipientPhone }}",
+        "content": "## Receive and send PDF\n\nA compact two-node flow that starts from an incoming webhook and immediately sends the requested PDF or document via WhatsApp using Supergreen.",
+        "width": 448,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        144
+      ],
+      "id": "6262010a-b13e-46b4-a8d7-079ff7cc6c9f",
+      "name": "Sticky Note1"
+    },
+    {
+      "id": "1",
+      "name": "When Invoice Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "send-invoice",
+        "httpMethod": "POST",
+        "responseMode": "onReceived"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "2",
+      "name": "Send PDF via Supergreen WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
         "type": "document",
-        "mediaSource": "url",
         "mediaUrl": "={{ $json.body.fileUrl }}",
+        "resource": "media",
+        "toNumber": "={{ $json.body.recipientPhone }}",
+        "operation": "sendMedia",
+        "mediaSource": "url",
         "additionalFields": {
           "caption": "={{ $json.body.caption || 'Here is your document.' }}",
           "filename": "={{ $json.body.filename || 'document.pdf' }}"
         }
       },
-      "id": "2",
-      "name": "Supergreen Send PDF",
-      "type": "n8n-nodes-supergreen.supergreen",
-      "typeVersion": 1,
-      "position": [
-        500,
-        300
-      ],
       "credentials": {
         "supergreenApi": {
           "id": "1",
           "name": "Supergreen Account"
         }
-      }
+      },
+      "typeVersion": 1
     }
   ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
   "connections": {
-    "Incoming Webhook": {
+    "When Invoice Submitted": {
       "main": [
         [
           {
-            "node": "Supergreen Send PDF",
+            "node": "Send PDF via Supergreen WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  },
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
   }
 }
