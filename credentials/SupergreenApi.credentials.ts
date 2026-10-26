@@ -36,6 +36,7 @@ export class SupergreenApi implements ICredentialType {
       name: 'defaultPhoneNumber',
       type: 'string',
       default: '',
+      required: true,
       placeholder: 'e.g. 14155552671 or 972501234567',
       description: 'Default sender WhatsApp/Telegram phone number (country code + number without plus or dashes)',
     },
@@ -52,7 +53,7 @@ export class SupergreenApi implements ICredentialType {
       url: '/',
       method: 'POST',
       body: {
-        endpoint: 'reconnect',
+        endpoint: 'verifyCredentials',
         payload: {
           number: '={{$credentials?.defaultPhoneNumber}}',
           token: '={{$credentials?.apiToken}}',
