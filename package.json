@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-supergreen",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "n8n community node for Supergreen - Headless WhatsApp & Telegram automation API",
   "keywords": [
     "n8n-community-node-package",

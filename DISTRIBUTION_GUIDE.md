@@ -81,3 +81,19 @@ Go to [https://n8n.io/creators](https://n8n.io/creators) to list the node in n8n
 - **Package Name:** `n8n-nodes-supergreen`
 - **GitHub URL:** `https://github.com/uriva/n8n-nodes-supergreen`
 - **Category:** Communication / Messaging
+
+---
+
+## Step 5: Submit Workflow Templates to `n8n.io/workflows`
+
+Log in at [https://creators.n8n.io](https://creators.n8n.io) -> **Submit a Workflow** and upload the two ready-made templates in `workflows/` (already formatted with n8n Creator sticky notes and clean credential placeholders):
+
+1. **`workflows/whatsapp-ai-auto-responder.json`**
+   - **Title:** WhatsApp Auto-Responder & AI Chatbot Trigger without Meta Cloud API (Supergreen)
+   - **Categories:** Support, AI, Communication
+   - **Import URL:** `https://supergreen.cc/workflows/whatsapp-ai-auto-responder.json`
+
+2. **`workflows/send-whatsapp-document.json`**
+   - **Title:** Send PDF Invoices and Documents on WhatsApp from a Webhook (Supergreen)
+   - **Categories:** Sales, Finance & Accounting, Communication
+   - **Import URL:** `https://supergreen.cc/workflows/send-whatsapp-document.json`
