@@ -1,98 +1,469 @@
 {
-  "name": "WhatsApp AI Auto-Responder with Supergreen",
+  "name": "WhatsApp AI Support and Lead Qualification Agent with Human Escalation",
   "nodes": [
     {
+      "id": "c2020002-2222-4222-8222-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -540,
+        60
+      ],
       "parameters": {
-        "content": "## WhatsApp Auto-Responder with Supergreen\n\n### How it works\n\nThis workflow listens for incoming WhatsApp messages via the Supergreen Trigger node and automatically sends an instant response back to the sender chat using Supergreen. Because Supergreen connects directly via WhatsApp Web sessions behind static proxies, you don't need Meta Business verification or approved message templates.\n\n### Setup steps\n\n- Configure your Supergreen API credentials in n8n (base URL and account secret token from supergreen.cc).\n- Select your connected phone number in the Supergreen Trigger node.\n- Customize the response message or connect an AI model in between the trigger and the reply node.\n- Activate the workflow. The webhook automatically registers with Supergreen to stream incoming messages in real time.\n\n### Customization\n\nInsert an AI Agent node (e.g. OpenAI or Anthropic) or a Code node before the reply step to generate dynamic, contextual answers for customer support or lead qualification.",
         "width": 480,
-        "height": 752
-      },
+        "height": 820,
+        "content": "## WhatsApp AI Support & Lead Qualification Agent with Human Escalation\n\n### Who this is for\nSmall businesses, clinics, and B2B teams running support or inbound sales on a regular WhatsApp number who want instant AI replies with conversation memory — plus automatic escalation to an internal WhatsApp team group when a human is needed.\n\n### How it works\n1. **When WhatsApp Message Arrives** (`Supergreen Trigger`) receives real-time incoming messages and ignores bot echoes (`onlyIncoming: true`).\n2. **Configure Agent Settings** defines your business context, pricing/FAQ rules, and optional internal escalation WhatsApp group ID.\n3. **Is Direct Text Inquiry?** filters out empty media-only events and skips `@g.us` group chatter when `ignoreGroupChats` is enabled.\n4. **Show Typing Indicator** displays native WhatsApp typing state while the LLM thinks.\n5. **Support & Lead Qualification Agent** uses **OpenAI (`gpt-4o-mini`)** + **Window Buffer Memory** (keyed per WhatsApp `chat.id`) to answer FAQs, qualify leads, and tag `[ESCALATE]` when a customer requests a human, refund, or custom quote.\n6. **Parse Reply & Escalation Flag** strips internal tags, sends a quoted WhatsApp reply to the customer, and alerts your team's WhatsApp group when escalation is triggered.\n\n### Requirements & Community Node\n- **Community node:** `n8n-nodes-supergreen` (tested on `v0.1.5`, verified community node available on **n8n Cloud** and self-hosted n8n — [npm & install guide](https://www.npmjs.com/package/n8n-nodes-supergreen)).\n- **Supergreen API** credential from [supergreen.cc](https://supergreen.cc) and an **OpenAI API** credential.\n- Tested on n8n `v1.76+`.\n\n### Setup steps\n1. Configure your **Supergreen API** and **OpenAI API** credentials.\n2. Edit **Configure Agent Settings**: replace `businessName`, `knowledgeBase`, and `escalationGroupChatId` (use Supergreen's *Group -> List* operation to find your team's `@g.us` ID, or leave blank to skip group alerts).\n3. Activate the workflow — the webhook registers automatically on your Supergreen WhatsApp line.\n\n### Limitations & notes\n- In-memory Window Buffer resets if n8n restarts; swap for Postgres/Redis Chat Memory for persistent history."
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000002",
+      "name": "Intake Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -352,
-        144
+        -20,
+        60
       ],
-      "id": "31b2c48e-7e9a-4c22-901d-5a8f0e381bd2",
-      "name": "Sticky Note"
-    },
-    {
       "parameters": {
-        "content": "## Listen and Auto-Reply\n\nA compact two-node flow that triggers on incoming WhatsApp messages and sends an immediate response back using Supergreen.",
-        "width": 448,
-        "height": 320,
-        "color": 7
-      },
+        "width": 680,
+        "height": 360,
+        "color": 7,
+        "content": "## 1. Inbound Trigger, Settings & Chat Filtering\n\nCaptures incoming WhatsApp messages, loads editable business context, and filters out empty events or group chatter so the AI only replies to direct customer inquiries."
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000003",
+      "name": "AI Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        208,
-        144
+        700,
+        60
       ],
-      "id": "59a721ef-6b21-4f9e-8c33-1d4e680a9bc4",
-      "name": "Sticky Note1"
+      "parameters": {
+        "width": 620,
+        "height": 520,
+        "color": 7,
+        "content": "## 2. Typing State & Context-Aware AI Agent\n\nSends a native WhatsApp typing indicator, then runs the LangChain Agent with per-sender memory (`chat.id`) and structured `[ESCALATE]` detection."
+      }
     },
     {
-      "id": "1",
-      "name": "When WhatsApp Message Received",
-      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "id": "c2020002-2222-4222-8222-000000000004",
+      "name": "Delivery Sticky",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
       "position": [
-        250,
-        300
+        1360,
+        60
       ],
+      "parameters": {
+        "width": 720,
+        "height": 440,
+        "color": 7,
+        "content": "## 3. Quoted Customer Reply & Team Escalation\n\nStrips internal tags, replies directly quoting the customer's WhatsApp message, and notifies your internal support group whenever human follow-up is required."
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000010",
+      "name": "When WhatsApp Message Arrives",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        20,
+        220
+      ],
+      "webhookId": "c2020002-2222-4222-8222-100000000010",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
       "parameters": {
         "network": "whatsapp",
         "events": [
           "message"
         ],
         "onlyIncoming": true
-      },
-      "credentials": {
-        "supergreenApi": {
-          "id": "1",
-          "name": "Supergreen Account"
-        }
-      },
-      "typeVersion": 1
+      }
     },
     {
-      "id": "2",
-      "name": "Send WhatsApp Reply",
-      "type": "n8n-nodes-supergreen.supergreen",
+      "id": "c2020002-2222-4222-8222-000000000011",
+      "name": "Configure Agent Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        500,
-        300
+        240,
+        220
       ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-biz",
+              "name": "businessName",
+              "value": "Acme Studio",
+              "type": "string"
+            },
+            {
+              "id": "set-kb",
+              "name": "knowledgeBase",
+              "value": "Hours: Mon-Fri 9am-6pm EST. Starter plan: $29/mo, Pro plan: $99/mo. Free 7-day trial available.",
+              "type": "string"
+            },
+            {
+              "id": "set-group",
+              "name": "escalationGroupChatId",
+              "value": "120363000000000000@g.us",
+              "type": "string"
+            },
+            {
+              "id": "set-ignore-groups",
+              "name": "ignoreGroupChats",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000012",
+      "name": "Is Direct Text Inquiry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-text",
+              "leftValue": "={{ ($('When WhatsApp Message Arrives').item.json.text || '').trim().length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-not-group",
+              "leftValue": "={{ !$json.ignoreGroupChats || !String($('When WhatsApp Message Arrives').item.json.chat?.id || '').endsWith('@g.us') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000013",
+      "name": "Show Typing Indicator",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        740,
+        220
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "sendTyping",
+        "toNumber": "={{ $('When WhatsApp Message Arrives').item.json.chat.id }}",
+        "duration": 4000
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000014",
+      "name": "Support and Lead Qualification Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        980,
+        220
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When WhatsApp Message Arrives').item.json.text }}",
+        "options": {
+          "systemMessage": "=You are the WhatsApp assistant for {{ $('Configure Agent Settings').item.json.businessName }}.\nBusiness facts: {{ $('Configure Agent Settings').item.json.knowledgeBase }}\n\nRules:\n1. Keep replies friendly, accurate, and concise (under 90 words) formatted cleanly for WhatsApp.\n2. When a prospect asks about pricing or services, answer their question and ask one brief qualifying question (use case or team size).\n3. If the user asks for a human agent, a billing refund, or a custom enterprise contract, start your response with the exact token [ESCALATE] followed by a polite reassurance that a teammate is joining shortly."
+        }
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000015",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        420
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      },
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000016",
+      "name": "WhatsApp Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        420
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('When WhatsApp Message Arrives').item.json.chat.id }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000017",
+      "name": "Parse Reply and Escalation Flag",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const rawOutput = String($input.first().json.output || '').trim();\nconst trigger = $('When WhatsApp Message Arrives').first().json;\nconst settings = $('Configure Agent Settings').first().json;\nconst needsEscalation = rawOutput.includes('[ESCALATE]');\nconst cleanReply = rawOutput.replace(/\\[ESCALATE\\]\\s*/g, '').trim() || 'Thanks for reaching out! A teammate will follow up shortly.';\nconst groupTarget = String(settings.escalationGroupChatId || '').trim();\nconst shouldNotifyGroup = needsEscalation && groupTarget !== '' && groupTarget !== '120363000000000000@g.us';\n\nreturn [{\n  json: {\n    chatId: trigger.chat.id,\n    senderName: trigger.author?.username || trigger.chat?.title || trigger.chat.id,\n    customerMessage: trigger.text,\n    quotedMessageId: trigger.messageId || '',\n    cleanReply,\n    needsEscalation,\n    shouldNotifyGroup,\n    escalationGroupChatId: groupTarget,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000018",
+      "name": "Send Quoted Reply on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1620,
+        220
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $json.chat.id }}",
-        "message": "=Thanks for your message: \"{{ $json.text }}\". An automated reply from n8n + Supergreen."
-      },
+        "toNumber": "={{ $json.chatId }}",
+        "message": "={{ $json.cleanReply }}",
+        "additionalFields": {
+          "quotedMessageId": "={{ $json.quotedMessageId }}"
+        }
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000019",
+      "name": "Needs Team Escalation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-escalate",
+              "leftValue": "={{ $('Parse Reply and Escalation Flag').item.json.shouldNotifyGroup }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c2020002-2222-4222-8222-000000000020",
+      "name": "Alert Support Group on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        160
+      ],
       "credentials": {
         "supergreenApi": {
-          "id": "1",
-          "name": "Supergreen Account"
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
         }
       },
-      "typeVersion": 1
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Parse Reply and Escalation Flag').item.json.escalationGroupChatId }}",
+        "message": "=Escalation requested on WhatsApp\nFrom: {{ $('Parse Reply and Escalation Flag').item.json.senderName }} ({{ $('Parse Reply and Escalation Flag').item.json.chatId }})\nMessage: \"{{ $('Parse Reply and Escalation Flag').item.json.customerMessage }}\"",
+        "additionalFields": {}
+      }
     }
   ],
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
-  },
   "connections": {
-    "When WhatsApp Message Received": {
+    "When WhatsApp Message Arrives": {
       "main": [
         [
           {
-            "node": "Send WhatsApp Reply",
+            "node": "Configure Agent Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configure Agent Settings": {
+      "main": [
+        [
+          {
+            "node": "Is Direct Text Inquiry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Direct Text Inquiry?": {
+      "main": [
+        [
+          {
+            "node": "Show Typing Indicator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Show Typing Indicator": {
+      "main": [
+        [
+          {
+            "node": "Support and Lead Qualification Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Support and Lead Qualification Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Support and Lead Qualification Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Support and Lead Qualification Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply and Escalation Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply and Escalation Flag": {
+      "main": [
+        [
+          {
+            "node": "Send Quoted Reply on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Quoted Reply on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Needs Team Escalation?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Team Escalation?": {
+      "main": [
+        [
+          {
+            "node": "Alert Support Group on WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
   }
 }

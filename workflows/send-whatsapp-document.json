@@ -1,96 +1,342 @@
 {
-  "name": "Send Document or PDF via WhatsApp with Supergreen",
+  "name": "Send PDF Invoices via WhatsApp with Validation and Delivery Receipts",
   "nodes": [
     {
+      "id": "b1010001-1111-4111-8111-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        80
+      ],
       "parameters": {
-        "content": "## Send Document or PDF via WhatsApp with Supergreen\n\n### How it works\n\nThis workflow receives an incoming webhook request and uses the received data to send a document or PDF through WhatsApp using Supergreen. The webhook acts as the entry point, then passes execution directly to the Supergreen node that performs the message delivery.\n\n### Setup steps\n\n- Configure the Incoming Webhook URL in n8n and share it with the system that will trigger PDF or document sends.\n- Set up Supergreen credentials/API access in n8n for the Supergreen Send PDF node.\n- Configure the Supergreen node with the target WhatsApp recipient, document/PDF URL or binary field, filename, and any required message parameters from the webhook payload.\n- Test the webhook with a sample payload to confirm the document is delivered successfully.\n\n### Customization\n\nAdjust the webhook payload mapping in the Supergreen node to support different recipients, document URLs, filenames, captions, or message templates.",
         "width": 480,
-        "height": 752
-      },
+        "height": 780,
+        "content": "## Send PDF Invoices via WhatsApp with Validation and Delivery Receipts\n\n### Who this is for\nSaaS teams, agencies, and e-commerce stores that generate PDF invoices in Stripe, QuickBooks, or a custom backend and want instant WhatsApp PDF delivery without Meta Cloud API template approvals.\n\n### What this workflow does\n1. Receives a `POST` webhook containing customer phone, invoice PDF URL, invoice number, and amount.\n2. Applies configurable company defaults (`Configure Invoice Settings`).\n3. Normalizes the phone number to digits-only E.164, enforces HTTPS on the PDF URL, and validates required fields.\n4. Downloads the PDF into binary memory (handling upstream `404`/`500` errors gracefully).\n5. Sends the PDF document with a formatted caption on WhatsApp via **Supergreen** and returns an HTTP `200`, `400`, or `502` JSON receipt to the caller.\n\n### Requirements & Community Node\n- **Community node:** `n8n-nodes-supergreen` (tested on `v0.1.5`, verified community node available on both **n8n Cloud** and self-hosted n8n — [npm package & install guide](https://www.npmjs.com/package/n8n-nodes-supergreen)).\n- A connected WhatsApp account and API token from [supergreen.cc](https://supergreen.cc).\n- Tested on n8n `v1.76+`.\n\n### Setup steps\n1. Install/enable **Supergreen** (`n8n-nodes-supergreen`) and configure the **Supergreen API** credential (Account Secret Token + Default Phone Number).\n2. Open **Configure Invoice Settings** and set `companyName` and `supportContact`.\n3. Activate the workflow and send a `POST` request to the Production Webhook URL:\n```json\n{\n  \"recipientPhone\": \"+14155550199\",\n  \"fileUrl\": \"https://example.com/invoices/INV-1042.pdf\",\n  \"invoiceNumber\": \"INV-1042\",\n  \"amountFormatted\": \"$49.00\",\n  \"customerName\": \"Alex Rivera\"\n}\n```\n\n### Error handling & limitations\n- Missing phones or non-HTTPS URLs return HTTP `400` without calling external services.\n- Unreachable PDF URLs route to the error output and return HTTP `502`.\n- Calling the webhook twice with the same payload sends the PDF twice; pass idempotency keys upstream if your billing system retries webhooks."
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000002",
+      "name": "Step 1 Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -352,
-        144
+        0,
+        80
       ],
-      "id": "4259102c-4bfe-43fc-a833-a28ed7059ce6",
-      "name": "Sticky Note"
-    },
-    {
       "parameters": {
-        "content": "## Receive and send PDF\n\nA compact two-node flow that starts from an incoming webhook and immediately sends the requested PDF or document via WhatsApp using Supergreen.",
-        "width": 448,
-        "height": 320,
-        "color": 7
-      },
+        "width": 700,
+        "height": 360,
+        "color": 7,
+        "content": "## 1. Intake, Defaults & Input Validation\n\nCentralizes editable company settings in **Configure Invoice Settings**, then normalizes `recipientPhone` and verifies that `fileUrl` uses `https://` before downloading anything."
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000003",
+      "name": "Step 2 Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        208,
-        144
+        740,
+        80
       ],
-      "id": "6262010a-b13e-46b4-a8d7-079ff7cc6c9f",
-      "name": "Sticky Note1"
+      "parameters": {
+        "width": 780,
+        "height": 440,
+        "color": 7,
+        "content": "## 2. Binary PDF Fetch, WhatsApp Delivery & HTTP Receipt\n\nDownloads the PDF as binary `data` so authenticated or expiring signed URLs still work, delivers the named `.pdf` over WhatsApp via Supergreen, and returns structured JSON status codes (`200`, `400`, or `502`)."
+      }
     },
     {
-      "id": "1",
-      "name": "When Invoice Submitted",
+      "id": "b1010001-1111-4111-8111-000000000010",
+      "name": "Receive Invoice Webhook",
       "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
       "position": [
-        250,
-        300
+        40,
+        240
       ],
+      "webhookId": "a9014c61-6f34-4f6b-9f1b-100000000010",
       "parameters": {
-        "path": "send-invoice",
         "httpMethod": "POST",
-        "responseMode": "onReceived"
-      },
-      "typeVersion": 1
+        "path": "whatsapp-invoice-pdf",
+        "responseMode": "responseNode",
+        "options": {}
+      }
     },
     {
-      "id": "2",
-      "name": "Send PDF via Supergreen WhatsApp",
-      "type": "n8n-nodes-supergreen.supergreen",
+      "id": "b1010001-1111-4111-8111-000000000011",
+      "name": "Configure Invoice Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        500,
-        300
+        260,
+        240
       ],
       "parameters": {
-        "type": "document",
-        "mediaUrl": "={{ $json.body.fileUrl }}",
-        "resource": "media",
-        "toNumber": "={{ $json.body.recipientPhone }}",
-        "operation": "sendMedia",
-        "mediaSource": "url",
-        "additionalFields": {
-          "caption": "={{ $json.body.caption || 'Here is your document.' }}",
-          "filename": "={{ $json.body.filename || 'document.pdf' }}"
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-company",
+              "name": "companyName",
+              "value": "Acme Corp",
+              "type": "string"
+            },
+            {
+              "id": "cfg-support",
+              "name": "supportContact",
+              "value": "Reply here if you have any billing questions.",
+              "type": "string"
+            },
+            {
+              "id": "cfg-payload",
+              "name": "payload",
+              "value": "={{ $json.body || $json }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000012",
+      "name": "Validate and Format Invoice Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst body = item.payload || {};\nconst rawPhone = String(body.recipientPhone || '').trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nconst fileUrl = String(body.fileUrl || '').trim();\nconst invoiceNumber = String(body.invoiceNumber || 'Invoice').replace(/[^a-zA-Z0-9._-]/g, '-');\nconst customerName = String(body.customerName || 'there').trim();\nconst amountFormatted = String(body.amountFormatted || '').trim();\n\nlet validationError = '';\nif (cleanPhone.length < 8 || cleanPhone.length > 15) {\n  validationError = 'recipientPhone must be a valid international phone number (8-15 digits).';\n} else if (!fileUrl.startsWith('https://')) {\n  validationError = 'fileUrl is required and must start with https://.';\n}\n\nconst filename = `${invoiceNumber}.pdf`;\nconst amountPart = amountFormatted ? ` (${amountFormatted})` : '';\nconst caption = body.caption\n  ? String(body.caption)\n  : `Hi ${customerName}, here is your invoice ${invoiceNumber}${amountPart} from ${item.companyName}. ${item.supportContact}`;\n\nreturn [{\n  json: {\n    isValid: validationError === '',\n    validationError,\n    cleanPhone,\n    fileUrl,\n    invoiceNumber,\n    filename,\n    caption,\n  },\n}];"
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000013",
+      "name": "Is Invoice Payload Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        780,
+        240
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000014",
+      "name": "Return 400 Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        440
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.validationError }) }}",
+        "options": {
+          "responseCode": 400
         }
-      },
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000015",
+      "name": "Download Invoice PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        180
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.fileUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000016",
+      "name": "Send PDF Invoice on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        120
+      ],
       "credentials": {
         "supergreenApi": {
-          "id": "1",
-          "name": "Supergreen Account"
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
         }
       },
-      "typeVersion": 1
+      "parameters": {
+        "resource": "media",
+        "operation": "sendMedia",
+        "toNumber": "={{ $('Validate and Format Invoice Payload').item.json.cleanPhone }}",
+        "type": "document",
+        "mediaSource": "binary",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "={{ $('Validate and Format Invoice Payload').item.json.caption }}",
+          "filename": "={{ $('Validate and Format Invoice Payload').item.json.filename }}",
+          "mimeType": "application/pdf"
+        }
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000017",
+      "name": "Return 200 Delivery Receipt",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        120
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, recipient: $('Validate and Format Invoice Payload').item.json.cleanPhone, invoiceNumber: $('Validate and Format Invoice Payload').item.json.invoiceNumber, filename: $('Validate and Format Invoice Payload').item.json.filename }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "b1010001-1111-4111-8111-000000000018",
+      "name": "Return 502 PDF Download Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1260,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"Failed to download PDF from fileUrl\", details: $json.error?.message || \"Upstream error\" }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      }
     }
   ],
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
-  },
   "connections": {
-    "When Invoice Submitted": {
+    "Receive Invoice Webhook": {
       "main": [
         [
           {
-            "node": "Send PDF via Supergreen WhatsApp",
+            "node": "Configure Invoice Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configure Invoice Settings": {
+      "main": [
+        [
+          {
+            "node": "Validate and Format Invoice Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate and Format Invoice Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Invoice Payload Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Invoice Payload Valid?": {
+      "main": [
+        [
+          {
+            "node": "Download Invoice PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 400 Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Invoice PDF": {
+      "main": [
+        [
+          {
+            "node": "Send PDF Invoice on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 502 PDF Download Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send PDF Invoice on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Return 200 Delivery Receipt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
   }
 }
