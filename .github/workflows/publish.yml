@@ -7,11 +7,6 @@ on:
         description: 'npm 2FA OTP code (only if using NPM_TOKEN with 2FA)'
         required: false
         type: string
-      use_token:
-        description: 'Use NPM_TOKEN secret instead of npm OIDC Trusted Publishing'
-        required: false
-        default: 'false'
-        type: string
 
 permissions:
   contents: read
@@ -38,10 +33,13 @@ jobs:
 
       - name: Publish to npm with provenance
         run: |
-          if [ "${{ inputs.use_token }}" != "true" ]; then
-            unset NODE_AUTH_TOKEN
-            rm -f "$NPM_CONFIG_USERCONFIG"
+          SAVED_USERCONFIG="$NPM_CONFIG_USERCONFIG"
+          # First try passwordless npm OIDC Trusted Publishing (no token or OTP needed)
+          if (unset NODE_AUTH_TOKEN NPM_CONFIG_USERCONFIG && npm publish --access public --provenance); then
+            exit 0
           fi
+          echo "OIDC Trusted Publishing not configured yet; falling back to NPM_TOKEN..."
+          export NPM_CONFIG_USERCONFIG="$SAVED_USERCONFIG"
           if [ -n "${{ inputs.otp }}" ]; then
             npm publish --access public --provenance --otp="${{ inputs.otp }}"
           else
