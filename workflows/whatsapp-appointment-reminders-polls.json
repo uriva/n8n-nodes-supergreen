@@ -1,60 +1,60 @@
 {
-  "name": "Send WhatsApp Appointment Reminders with Poll Confirmation from Google Sheets",
+  "name": "Automate WhatsApp Appointment Reminders, Interactive Poll Confirmations, and Rescheduling with Google Sheets and Supergreen",
   "nodes": [
     {
-      "id": "d3030003-3333-4333-8333-000000000001",
+      "id": "e4040004-4444-4444-8444-000000000001",
       "name": "Workflow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -540,
-        60
+        -580,
+        40
       ],
       "parameters": {
-        "width": 480,
-        "height": 860,
-        "content": "## WhatsApp Appointment Reminders with Interactive Poll Confirmation (Google Sheets)\n\n### Who this is for\nClinics, salons, consultants, and service businesses tracking bookings in Google Sheets that want automated 24-hour WhatsApp reminders with 1-tap native WhatsApp Poll confirmation — without Meta template approvals.\n\n### How it works (Two-way closed loop)\n- **Flow A — Hourly Reminder Sender:**\n  1. Checks your Google Sheet every hour for upcoming rows where `status` is `Scheduled`, `reminderSent` is not `yes`, and `appointmentIso` falls within the next `reminderWindowHours` (default 24h).\n  2. Sends a personalized reminder + an interactive WhatsApp Poll (`Confirm attendance` / `Need to reschedule`) via **Supergreen**.\n  3. Marks `reminderSent = yes` in the sheet so reminders never send twice.\n- **Flow B — Poll Vote Listener:**\n  1. **When Customer Votes on Poll** (`Supergreen Trigger`, `events: ['vote']`) captures the customer's poll tap in real time.\n  2. Updates the customer's row in Google Sheets to `Confirmed` or `Reschedule Requested` and automatically replies with your booking reschedule link when needed.\n\n### Requirements & Community Node\n- **Community node:** `n8n-nodes-supergreen` (tested on `v0.1.5`, verified community node on **n8n Cloud** & self-hosted — [npm & install guide](https://www.npmjs.com/package/n8n-nodes-supergreen)).\n- **Supergreen API** credential ([supergreen.cc](https://supergreen.cc)) and **Google Sheets OAuth2** credential.\n- A Google Sheet with columns: `phone`, `clientName`, `appointmentIso`, `serviceName`, `reminderSent`, `status`.\n- Tested on n8n `v1.76+`.\n\n### Setup steps\n1. Select your spreadsheet in all three **Google Sheets** nodes.\n2. Update `businessName` and `rescheduleUrl` in **Configure Reminder Settings**.\n3. Activate the workflow."
+        "width": 500,
+        "height": 920,
+        "content": "## Automate WhatsApp Appointment Reminders, Poll Confirmations & Rescheduling\n\n### Who this is for\nClinics, salons, coaching practices, and field-service teams managing bookings in Google Sheets and Google Calendar that want 1-tap interactive WhatsApp confirmation polls without Meta Business template approvals.\n\n### What problem it solves\nPlain SMS/WhatsApp text reminders require free-text replies (`\"yes\"`, `\"can we move to Thursday?\"`) that are brittle to parse, while official WhatsApp Cloud API templates cannot send native WhatsApp Polls. This workflow closes the loop end-to-end:\n1. **Flow A (Hourly Outbound Dispatch):** Reads `Appointments` from Google Sheets, filters `Scheduled` bookings due within the next `reminderWindowHours` (default `24h`) that haven't received a reminder yet, verifies the Google Calendar event still exists (skipping cancelled calendar events), sends an interactive 3-option WhatsApp Poll (`Confirm attendance`, `Running 10 min late`, `Need to reschedule`), and writes `reminderSent = yes` + `reminderSentAt` back to the sheet.\n2. **Flow B (Real-Time Poll Vote Callback):** Listens for incoming WhatsApp `vote` events via **Supergreen Trigger**, matches the voter's phone number to their active upcoming booking in Google Sheets, updates `status` (`Confirmed`, `Running Late`, or `Reschedule Requested`), replies to the client (sending your self-serve booking link when rescheduling), and alerts your staff WhatsApp group whenever someone is running late or needs to reschedule.\n\n### Community Node & Compatibility\n- **Community node:** `n8n-nodes-supergreen` (tested with `v0.1.5` on n8n `v1.76+`).\n- **Platform support:** `n8n-nodes-supergreen` is a **verified community node**, so it works directly on **n8n Cloud** (search `Supergreen` in the nodes panel) and on self-hosted n8n (`Settings -> Community Nodes -> n8n-nodes-supergreen`). Docs & npm: https://www.npmjs.com/package/n8n-nodes-supergreen\n\n### Setup steps\n1. Create a Google Sheet tab named `Appointments` with columns: `bookingId`, `phone`, `clientName`, `serviceName`, `appointmentIso`, `calendarEventId`, `status`, `reminderSent`, `reminderSentAt`, `lastVoteAt`.\n2. Connect credentials: **Supergreen API** (from https://supergreen.cc), **Google Sheets OAuth2**, and **Google Calendar OAuth2**.\n3. Open **Configure Clinic Settings** (Flow A) and **Configure Callback Settings** (Flow B) to set `businessName`, `spreadsheetId`, `calendarId`, `rescheduleUrl`, and `staffGroupChatId` (`YOUR_STAFF_GROUP_ID@g.us`).\n4. Activate the workflow.\n\n### Edge cases & limitations\n- Duplicate reminders are prevented via `reminderSent = yes`. If you reschedule a row manually, clear `reminderSent` so the new slot receives a reminder.\n- If a client changes their poll vote, Flow B updates the sheet with their latest selection and `lastVoteAt` timestamp."
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000002",
-      "name": "Outbound Sticky",
+      "id": "e4040004-4444-4444-8444-000000000002",
+      "name": "Flow A Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -20,
-        60
+        -40,
+        40
       ],
       "parameters": {
-        "width": 1360,
-        "height": 360,
+        "width": 1840,
+        "height": 420,
         "color": 7,
-        "content": "## Flow A: Hourly Reminder & Interactive Confirmation Poll\n\nReads upcoming bookings from Google Sheets, filters unsent appointments due within the configured window, sends a native WhatsApp Poll, and marks `reminderSent = yes` to prevent duplicate sends."
+        "content": "## Flow A: Hourly Reminder Scanner, Calendar Cross-Check & Interactive WhatsApp Poll\n\nScans `Appointments` hourly, filters unsent `Scheduled` bookings inside the reminder window, cross-checks Google Calendar so cancelled events aren't messaged, sends a 3-choice WhatsApp Poll, and records `reminderSent = yes`."
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000003",
-      "name": "Inbound Sticky",
+      "id": "e4040004-4444-4444-8444-000000000003",
+      "name": "Flow B Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -20,
-        460
+        -40,
+        500
       ],
       "parameters": {
-        "width": 1360,
-        "height": 400,
+        "width": 1840,
+        "height": 460,
         "color": 7,
-        "content": "## Flow B: Real-Time Poll Vote Handler & Reschedule Follow-Up\n\nListens for `vote` events on WhatsApp polls, updates the matching phone number's appointment `status` in Google Sheets, and sends a self-serve reschedule link if the client tapped *Need to reschedule*."
+        "content": "## Flow B: Real-Time WhatsApp Poll Vote Listener, Sheet Sync & Staff Escalation\n\nCaptures native WhatsApp `vote` events, looks up the client's active booking in Google Sheets, updates attendance status, sends the client a confirmation or reschedule link, and alerts the staff WhatsApp group for late/reschedule votes."
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000010",
-      "name": "Check Schedule Every Hour",
+      "id": "e4040004-4444-4444-8444-000000000010",
+      "name": "Scan Bookings Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        20,
+        0,
         220
       ],
       "parameters": {
@@ -69,12 +69,12 @@
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000011",
-      "name": "Configure Reminder Settings",
+      "id": "e4040004-4444-4444-8444-000000000011",
+      "name": "Configure Clinic Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        240,
+        220,
         220
       ],
       "parameters": {
@@ -83,22 +83,28 @@
         "assignments": {
           "assignments": [
             {
-              "id": "rem-biz",
+              "id": "a1",
               "name": "businessName",
-              "value": "Bright Dental Clinic",
+              "value": "Bright Smile Dental",
               "type": "string"
             },
             {
-              "id": "rem-window",
+              "id": "a2",
+              "name": "spreadsheetId",
+              "value": "YOUR_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "calendarId",
+              "value": "primary",
+              "type": "string"
+            },
+            {
+              "id": "a4",
               "name": "reminderWindowHours",
               "value": 24,
               "type": "number"
-            },
-            {
-              "id": "rem-url",
-              "name": "rescheduleUrl",
-              "value": "https://cal.example.com/reschedule",
-              "type": "string"
             }
           ]
         },
@@ -106,25 +112,25 @@
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000012",
-      "name": "Read Appointments Sheet",
+      "id": "e4040004-4444-4444-8444-000000000012",
+      "name": "Fetch Appointments Rows",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        460,
+        440,
         220
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "gsheets-cred",
-          "name": "Google Sheets Account"
+          "name": "Google Sheets OAuth2"
         }
       },
       "parameters": {
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "value": "YOUR_GOOGLE_SHEET_ID",
+          "value": "={{ $json.spreadsheetId }}",
           "mode": "id"
         },
         "sheetName": {
@@ -136,26 +142,87 @@
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000013",
-      "name": "Filter Due Unsent Appointments",
+      "id": "e4040004-4444-4444-8444-000000000013",
+      "name": "Filter Unsent Bookings in 24h Window",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        660,
         220
       ],
       "parameters": {
-        "jsCode": "const settings = $('Configure Reminder Settings').first().json;\nconst windowMs = Number(settings.reminderWindowHours || 24) * 3600 * 1000;\nconst now = Date.now();\nconst due = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const cleanPhone = String(row.phone || '').replace(/\\D/g, '');\n  const apptMs = Date.parse(String(row.appointmentIso || ''));\n  const alreadySent = String(row.reminderSent || '').toLowerCase() === 'yes';\n  const status = String(row.status || 'Scheduled').toLowerCase();\n  if (cleanPhone.length >= 8 && !Number.isNaN(apptMs) && !alreadySent && status === 'scheduled') {\n    const diff = apptMs - now;\n    if (diff > 0 && diff <= windowMs) {\n      due.push({\n        json: {\n          cleanPhone,\n          rawPhone: row.phone,\n          clientName: row.clientName || 'there',\n          serviceName: row.serviceName || 'appointment',\n          appointmentIso: row.appointmentIso,\n          businessName: settings.businessName,\n        },\n      });\n    }\n  }\n}\nreturn due;"
+        "jsCode": "const cfg = $('Configure Clinic Settings').first().json;\nconst windowMs = Number(cfg.reminderWindowHours || 24) * 3600 * 1000;\nconst now = Date.now();\nconst results = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const cleanPhone = String(row.phone || '').replace(/\\D/g, '');\n  const apptMs = Date.parse(String(row.appointmentIso || ''));\n  const status = String(row.status || 'Scheduled').trim().toLowerCase();\n  const sent = String(row.reminderSent || '').trim().toLowerCase() === 'yes';\n  if (cleanPhone.length >= 8 && !Number.isNaN(apptMs) && status === 'scheduled' && !sent) {\n    const delta = apptMs - now;\n    if (delta > 15 * 60 * 1000 && delta <= windowMs) {\n      const formattedTime = new Date(apptMs).toUTCString().replace(':00 GMT', ' UTC');\n      results.push({\n        json: {\n          bookingId: String(row.bookingId || `${cleanPhone}-${apptMs}`),\n          cleanPhone,\n          clientName: String(row.clientName || 'there').trim(),\n          serviceName: String(row.serviceName || 'appointment').trim(),\n          appointmentIso: String(row.appointmentIso),\n          formattedTime,\n          calendarEventId: String(row.calendarEventId || '').trim(),\n          businessName: cfg.businessName,\n          spreadsheetId: cfg.spreadsheetId,\n          calendarId: cfg.calendarId,\n        },\n      });\n    }\n  }\n}\nreturn results;"
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000014",
-      "name": "Send Confirmation Poll on WhatsApp",
+      "id": "e4040004-4444-4444-8444-000000000014",
+      "name": "Verify Google Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "gcal-cred",
+          "name": "Google Calendar OAuth2"
+        }
+      },
+      "parameters": {
+        "resource": "event",
+        "operation": "get",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "eventId": "={{ $json.calendarEventId }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "e4040004-4444-4444-8444-000000000015",
+      "name": "Is Calendar Event Still Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cal-active",
+              "leftValue": "={{ !$('Filter Unsent Bookings in 24h Window').item.json.calendarEventId || ($json.status !== 'cancelled' && !$json.error) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e4040004-4444-4444-8444-000000000016",
+      "name": "Send Interactive Poll Reminder",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        920,
-        220
+        1340,
+        160
       ],
       "credentials": {
         "supergreenApi": {
@@ -166,31 +233,31 @@
       "parameters": {
         "resource": "poll",
         "operation": "sendPoll",
-        "toNumber": "={{ $json.cleanPhone }}",
-        "name": "=Hi {{ $json.clientName }}! Reminder for your {{ $json.serviceName }} at {{ $json.businessName }} ({{ $json.appointmentIso }}). Can you make it?",
-        "options": "Confirm attendance, Need to reschedule"
+        "toNumber": "={{ $('Filter Unsent Bookings in 24h Window').item.json.cleanPhone }}",
+        "name": "=Hi {{ $('Filter Unsent Bookings in 24h Window').item.json.clientName }}! Reminder for your {{ $('Filter Unsent Bookings in 24h Window').item.json.serviceName }} at {{ $('Filter Unsent Bookings in 24h Window').item.json.businessName }} on {{ $('Filter Unsent Bookings in 24h Window').item.json.formattedTime }}. Please tap one option:",
+        "options": "Confirm attendance, Running 10 min late, Need to reschedule"
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000015",
+      "id": "e4040004-4444-4444-8444-000000000017",
       "name": "Mark Reminder Sent in Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1140,
-        220
+        1580,
+        160
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "gsheets-cred",
-          "name": "Google Sheets Account"
+          "name": "Google Sheets OAuth2"
         }
       },
       "parameters": {
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "YOUR_GOOGLE_SHEET_ID",
+          "value": "={{ $('Filter Unsent Bookings in 24h Window').item.json.spreadsheetId }}",
           "mode": "id"
         },
         "sheetName": {
@@ -201,26 +268,67 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "phone": "={{ $('Filter Due Unsent Appointments').item.json.rawPhone }}",
-            "reminderSent": "yes"
+            "bookingId": "={{ $('Filter Unsent Bookings in 24h Window').item.json.bookingId }}",
+            "reminderSent": "yes",
+            "reminderSentAt": "={{ $now.toISO() }}"
           },
           "matchingColumns": [
-            "phone"
+            "bookingId"
           ]
         },
         "options": {}
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000020",
-      "name": "When Customer Votes on Poll",
+      "id": "e4040004-4444-4444-8444-000000000018",
+      "name": "Sync Cancelled Calendar Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        320
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Filter Unsent Bookings in 24h Window').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $('Filter Unsent Bookings in 24h Window').item.json.bookingId }}",
+            "status": "Cancelled on Calendar"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e4040004-4444-4444-8444-000000000020",
+      "name": "When Client Votes on WhatsApp Poll",
       "type": "n8n-nodes-supergreen.supergreenTrigger",
       "typeVersion": 1,
       "position": [
-        20,
-        620
+        0,
+        680
       ],
-      "webhookId": "d3030003-3333-4333-8333-200000000020",
+      "webhookId": "e4040004-4444-4444-8444-200000000020",
       "credentials": {
         "supergreenApi": {
           "id": "supergreen-cred",
@@ -236,38 +344,105 @@
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000021",
-      "name": "Parse Poll Selection",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "e4040004-4444-4444-8444-000000000021",
+      "name": "Configure Callback Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        260,
-        620
+        220,
+        680
       ],
       "parameters": {
-        "jsCode": "const ev = $input.first().json;\nconst selectedIdx = Array.isArray(ev.vote?.selectedOptionIndices) ? ev.vote.selectedOptionIndices[0] : -1;\nconst chatId = String(ev.chat?.id || '');\nconst cleanPhone = chatId.replace(/@.*$/, '').replace(/\\D/g, '');\nif (selectedIdx !== 0 && selectedIdx !== 1) return [];\nconst needsReschedule = selectedIdx === 1;\nreturn [{\n  json: {\n    chatId,\n    cleanPhone,\n    newStatus: needsReschedule ? 'Reschedule Requested' : 'Confirmed',\n    needsReschedule,\n    rescheduleUrl: 'https://cal.example.com/reschedule',\n  },\n}];"
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "spreadsheetId",
+              "value": "YOUR_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "b2",
+              "name": "rescheduleUrl",
+              "value": "https://cal.example.com/reschedule",
+              "type": "string"
+            },
+            {
+              "id": "b3",
+              "name": "staffGroupChatId",
+              "value": "YOUR_STAFF_GROUP_ID@g.us",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000022",
-      "name": "Update Attendance Status in Sheet",
+      "id": "e4040004-4444-4444-8444-000000000022",
+      "name": "Lookup Voter Bookings in Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        500,
-        620
+        440,
+        680
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "gsheets-cred",
-          "name": "Google Sheets Account"
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e4040004-4444-4444-8444-000000000023",
+      "name": "Match Active Booking and Classify Vote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        680
+      ],
+      "parameters": {
+        "jsCode": "const voteEvent = $('When Client Votes on WhatsApp Poll').first().json;\nconst cfg = $('Configure Callback Settings').first().json;\nconst indices = voteEvent.vote?.selectedOptionIndices || [];\nif (!Array.isArray(indices) || indices.length === 0) return [];\n\nconst choiceIndex = Number(indices[0]);\nconst chatId = String(voteEvent.chat?.id || '');\nconst voterDigits = chatId.replace(/@.*$/, '').replace(/\\D/g, '');\nif (!voterDigits) return [];\n\nconst now = Date.now();\nconst matching = $input.all()\n  .map((i) => i.json)\n  .filter((r) => {\n    const rowPhone = String(r.phone || '').replace(/\\D/g, '');\n    const apptMs = Date.parse(String(r.appointmentIso || ''));\n    return rowPhone === voterDigits && !Number.isNaN(apptMs) && apptMs > now - 2 * 3600 * 1000;\n  })\n  .sort((a, b) => Date.parse(String(a.appointmentIso)) - Date.parse(String(b.appointmentIso)));\n\nconst booking = matching[0];\nif (!booking) return [];\n\nconst statusMap = { 0: 'Confirmed', 1: 'Running Late', 2: 'Reschedule Requested' };\nconst newStatus = statusMap[choiceIndex] || 'Confirmed';\nconst needsStaffAlert = choiceIndex === 1 || choiceIndex === 2;\nconst hasStaffGroup = cfg.staffGroupChatId && cfg.staffGroupChatId !== 'YOUR_STAFF_GROUP_ID@g.us';\n\nconst replyText = choiceIndex === 2\n  ? `No problem, ${booking.clientName || 'there'}! Pick a new time here: ${cfg.rescheduleUrl}`\n  : choiceIndex === 1\n  ? `Thanks for the heads-up, ${booking.clientName || 'there'}! We let the front desk know you are running ~10 minutes late.`\n  : `Thanks for confirming, ${booking.clientName || 'there'}! We look forward to seeing you for your ${booking.serviceName || 'appointment'}.`;\n\nreturn [{\n  json: {\n    bookingId: booking.bookingId,\n    clientName: booking.clientName || voterDigits,\n    serviceName: booking.serviceName || 'Appointment',\n    appointmentIso: booking.appointmentIso,\n    chatId,\n    newStatus,\n    replyText,\n    shouldAlertStaff: Boolean(needsStaffAlert && hasStaffGroup),\n    staffGroupChatId: cfg.staffGroupChatId,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "e4040004-4444-4444-8444-000000000024",
+      "name": "Update Booking Status in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        900,
+        680
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
         }
       },
       "parameters": {
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "YOUR_GOOGLE_SHEET_ID",
+          "value": "={{ $json.spreadsheetId }}",
           "mode": "id"
         },
         "sheetName": {
@@ -278,24 +453,50 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "phone": "={{ $json.cleanPhone }}",
-            "status": "={{ $json.newStatus }}"
+            "bookingId": "={{ $json.bookingId }}",
+            "status": "={{ $json.newStatus }}",
+            "lastVoteAt": "={{ $now.toISO() }}"
           },
           "matchingColumns": [
-            "phone"
+            "bookingId"
           ]
         },
         "options": {}
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000023",
-      "name": "Did Client Request Reschedule?",
+      "id": "e4040004-4444-4444-8444-000000000025",
+      "name": "Send Client Follow-Up on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        680
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Match Active Booking and Classify Vote').item.json.chatId }}",
+        "message": "={{ $('Match Active Booking and Classify Vote').item.json.replyText }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "e4040004-4444-4444-8444-000000000026",
+      "name": "Should Alert Staff Group?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        740,
-        620
+        1380,
+        680
       ],
       "parameters": {
         "conditions": {
@@ -306,8 +507,8 @@
           },
           "conditions": [
             {
-              "id": "cond-resched",
-              "leftValue": "={{ $('Parse Poll Selection').item.json.needsReschedule }}",
+              "id": "staff-alert",
+              "leftValue": "={{ $('Match Active Booking and Classify Vote').item.json.shouldAlertStaff }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -322,13 +523,13 @@
       }
     },
     {
-      "id": "d3030003-3333-4333-8333-000000000024",
-      "name": "Send Reschedule Link on WhatsApp",
+      "id": "e4040004-4444-4444-8444-000000000027",
+      "name": "Notify Front Desk WhatsApp Group",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1000,
-        560
+        1600,
+        620
       ],
       "credentials": {
         "supergreenApi": {
@@ -339,83 +540,87 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $('Parse Poll Selection').item.json.chatId }}",
-        "message": "=No problem! You can pick a new time that works best for you here: {{ $('Parse Poll Selection').item.json.rescheduleUrl }}",
-        "additionalFields": {
-          "linkPreview": true
-        }
-      }
-    },
-    {
-      "id": "d3030003-3333-4333-8333-000000000025",
-      "name": "Send Confirmation Thank-You",
-      "type": "n8n-nodes-supergreen.supergreen",
-      "typeVersion": 1,
-      "position": [
-        1000,
-        720
-      ],
-      "credentials": {
-        "supergreenApi": {
-          "id": "supergreen-cred",
-          "name": "Supergreen API"
-        }
-      },
-      "parameters": {
-        "resource": "message",
-        "operation": "send",
-        "toNumber": "={{ $('Parse Poll Selection').item.json.chatId }}",
-        "message": "Thanks for confirming! We look forward to seeing you.",
+        "toNumber": "={{ $('Match Active Booking and Classify Vote').item.json.staffGroupChatId }}",
+        "message": "=Booking update: {{ $('Match Active Booking and Classify Vote').item.json.clientName }} voted \"{{ $('Match Active Booking and Classify Vote').item.json.newStatus }}\" for {{ $('Match Active Booking and Classify Vote').item.json.serviceName }} ({{ $('Match Active Booking and Classify Vote').item.json.appointmentIso }}).",
         "additionalFields": {}
       }
     }
   ],
   "connections": {
-    "Check Schedule Every Hour": {
+    "Scan Bookings Every Hour": {
       "main": [
         [
           {
-            "node": "Configure Reminder Settings",
+            "node": "Configure Clinic Settings",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Configure Reminder Settings": {
+    "Configure Clinic Settings": {
       "main": [
         [
           {
-            "node": "Read Appointments Sheet",
+            "node": "Fetch Appointments Rows",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Appointments Sheet": {
+    "Fetch Appointments Rows": {
       "main": [
         [
           {
-            "node": "Filter Due Unsent Appointments",
+            "node": "Filter Unsent Bookings in 24h Window",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Due Unsent Appointments": {
+    "Filter Unsent Bookings in 24h Window": {
       "main": [
         [
           {
-            "node": "Send Confirmation Poll on WhatsApp",
+            "node": "Verify Google Calendar Event",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Confirmation Poll on WhatsApp": {
+    "Verify Google Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Is Calendar Event Still Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Calendar Event Still Active?": {
+      "main": [
+        [
+          {
+            "node": "Send Interactive Poll Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sync Cancelled Calendar Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Interactive Poll Reminder": {
       "main": [
         [
           {
@@ -426,51 +631,77 @@
         ]
       ]
     },
-    "When Customer Votes on Poll": {
+    "When Client Votes on WhatsApp Poll": {
       "main": [
         [
           {
-            "node": "Parse Poll Selection",
+            "node": "Configure Callback Settings",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Poll Selection": {
+    "Configure Callback Settings": {
       "main": [
         [
           {
-            "node": "Update Attendance Status in Sheet",
+            "node": "Lookup Voter Bookings in Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Attendance Status in Sheet": {
+    "Lookup Voter Bookings in Sheet": {
       "main": [
         [
           {
-            "node": "Did Client Request Reschedule?",
+            "node": "Match Active Booking and Classify Vote",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Did Client Request Reschedule?": {
+    "Match Active Booking and Classify Vote": {
       "main": [
         [
           {
-            "node": "Send Reschedule Link on WhatsApp",
+            "node": "Update Booking Status in Sheet",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "Update Booking Status in Sheet": {
+      "main": [
         [
           {
-            "node": "Send Confirmation Thank-You",
+            "node": "Send Client Follow-Up on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Client Follow-Up on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Should Alert Staff Group?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Alert Staff Group?": {
+      "main": [
+        [
+          {
+            "node": "Notify Front Desk WhatsApp Group",
             "type": "main",
             "index": 0
           }

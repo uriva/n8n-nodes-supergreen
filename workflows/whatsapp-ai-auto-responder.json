@@ -117,7 +117,7 @@
             {
               "id": "set-group",
               "name": "escalationGroupChatId",
-              "value": "120363000000000000@g.us",
+              "value": "YOUR_ESCALATION_GROUP_ID@g.us",
               "type": "string"
             },
             {
@@ -265,7 +265,7 @@
         220
       ],
       "parameters": {
-        "jsCode": "const rawOutput = String($input.first().json.output || '').trim();\nconst trigger = $('When WhatsApp Message Arrives').first().json;\nconst settings = $('Configure Agent Settings').first().json;\nconst needsEscalation = rawOutput.includes('[ESCALATE]');\nconst cleanReply = rawOutput.replace(/\\[ESCALATE\\]\\s*/g, '').trim() || 'Thanks for reaching out! A teammate will follow up shortly.';\nconst groupTarget = String(settings.escalationGroupChatId || '').trim();\nconst shouldNotifyGroup = needsEscalation && groupTarget !== '' && groupTarget !== '120363000000000000@g.us';\n\nreturn [{\n  json: {\n    chatId: trigger.chat.id,\n    senderName: trigger.author?.username || trigger.chat?.title || trigger.chat.id,\n    customerMessage: trigger.text,\n    quotedMessageId: trigger.messageId || '',\n    cleanReply,\n    needsEscalation,\n    shouldNotifyGroup,\n    escalationGroupChatId: groupTarget,\n  },\n}];"
+        "jsCode": "const rawOutput = String($input.first().json.output || '').trim();\nconst trigger = $('When WhatsApp Message Arrives').first().json;\nconst settings = $('Configure Agent Settings').first().json;\nconst needsEscalation = rawOutput.includes('[ESCALATE]');\nconst cleanReply = rawOutput.replace(/\\[ESCALATE\\]\\s*/g, '').trim() || 'Thanks for reaching out! A teammate will follow up shortly.';\nconst groupTarget = String(settings.escalationGroupChatId || '').trim();\nconst shouldNotifyGroup = needsEscalation && groupTarget !== '' && groupTarget !== 'YOUR_ESCALATION_GROUP_ID@g.us';\n\nreturn [{\n  json: {\n    chatId: trigger.chat.id,\n    senderName: trigger.author?.username || trigger.chat?.title || trigger.chat.id,\n    customerMessage: trigger.text,\n    quotedMessageId: trigger.messageId || '',\n    cleanReply,\n    needsEscalation,\n    shouldNotifyGroup,\n    escalationGroupChatId: groupTarget,\n  },\n}];"
       }
     },
     {
