@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/uriva/n8n-nodes-supergreen.git"
+    "url": "git+https://github.com/uriva/n8n-nodes-supergreen.git"
   },
   "main": "index.js",
   "scripts": {

@@ -23,7 +23,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm CLI for OIDC & staged publishing
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -31,19 +33,11 @@ jobs:
       - name: Build node package
         run: npm run build
 
-      - name: Publish to npm with provenance
+      - name: Publish to npm with OIDC (direct or staged)
         run: |
-          SAVED_USERCONFIG="$NPM_CONFIG_USERCONFIG"
-          # First try passwordless npm OIDC Trusted Publishing (no token or OTP needed)
-          if (unset NODE_AUTH_TOKEN NPM_CONFIG_USERCONFIG && npm publish --access public --provenance); then
+          if npm publish --access public; then
+            echo "Published directly via OIDC!"
             exit 0
           fi
-          echo "OIDC Trusted Publishing not configured yet; falling back to NPM_TOKEN..."
-          export NPM_CONFIG_USERCONFIG="$SAVED_USERCONFIG"
-          if [ -n "${{ inputs.otp }}" ]; then
-            npm publish --access public --provenance --otp="${{ inputs.otp }}"
-          else
-            npm publish --access public --provenance
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          echo "Direct npm publish not enabled on Trusted Publisher; staging release via npm stage publish..."
+          npm stage publish --access public
