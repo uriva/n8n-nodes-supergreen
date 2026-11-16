@@ -4,8 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       otp:
-        description: 'npm 2FA OTP code (if using token requiring 2FA)'
+        description: 'npm 2FA OTP code (only if using NPM_TOKEN with 2FA)'
         required: false
+        type: string
+      use_token:
+        description: 'Use NPM_TOKEN secret instead of npm OIDC Trusted Publishing'
+        required: false
+        default: 'false'
         type: string
 
 permissions:
@@ -17,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -33,6 +38,10 @@ jobs:
 
       - name: Publish to npm with provenance
         run: |
+          if [ "${{ inputs.use_token }}" != "true" ]; then
+            unset NODE_AUTH_TOKEN
+            rm -f "$NPM_CONFIG_USERCONFIG"
+          fi
           if [ -n "${{ inputs.otp }}" ]; then
             npm publish --access public --provenance --otp="${{ inputs.otp }}"
           else
