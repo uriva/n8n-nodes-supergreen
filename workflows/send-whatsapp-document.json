@@ -1,77 +1,83 @@
 {
-  "name": "Send PDF Invoices via WhatsApp with Validation and Delivery Receipts",
+  "name": "Send Stripe PDF Invoices and Recover Failed Payments on WhatsApp with Google Sheets and Supergreen",
   "nodes": [
     {
-      "id": "b1010001-1111-4111-8111-000000000001",
+      "id": "a6060006-6666-4666-8666-000000000001",
       "name": "Workflow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -520,
-        80
+        -600,
+        40
       ],
       "parameters": {
-        "width": 480,
-        "height": 780,
-        "content": "## Send PDF Invoices via WhatsApp with Validation and Delivery Receipts\n\n### Who this is for\nSaaS teams, agencies, and e-commerce stores that generate PDF invoices in Stripe, QuickBooks, or a custom backend and want instant WhatsApp PDF delivery without Meta Cloud API template approvals.\n\n### What this workflow does\n1. Receives a `POST` webhook containing customer phone, invoice PDF URL, invoice number, and amount.\n2. Applies configurable company defaults (`Configure Invoice Settings`).\n3. Normalizes the phone number to digits-only E.164, enforces HTTPS on the PDF URL, and validates required fields.\n4. Downloads the PDF into binary memory (handling upstream `404`/`500` errors gracefully).\n5. Sends the PDF document with a formatted caption on WhatsApp via **Supergreen** and returns an HTTP `200`, `400`, or `502` JSON receipt to the caller.\n\n### Requirements & Community Node\n- **Community node:** `n8n-nodes-supergreen` (tested on `v0.1.5`, verified community node available on both **n8n Cloud** and self-hosted n8n — [npm package & install guide](https://www.npmjs.com/package/n8n-nodes-supergreen)).\n- A connected WhatsApp account and API token from [supergreen.cc](https://supergreen.cc).\n- Tested on n8n `v1.76+`.\n\n### Setup steps\n1. Install/enable **Supergreen** (`n8n-nodes-supergreen`) and configure the **Supergreen API** credential (Account Secret Token + Default Phone Number).\n2. Open **Configure Invoice Settings** and set `companyName` and `supportContact`.\n3. Activate the workflow and send a `POST` request to the Production Webhook URL:\n```json\n{\n  \"recipientPhone\": \"+14155550199\",\n  \"fileUrl\": \"https://example.com/invoices/INV-1042.pdf\",\n  \"invoiceNumber\": \"INV-1042\",\n  \"amountFormatted\": \"$49.00\",\n  \"customerName\": \"Alex Rivera\"\n}\n```\n\n### Error handling & limitations\n- Missing phones or non-HTTPS URLs return HTTP `400` without calling external services.\n- Unreachable PDF URLs route to the error output and return HTTP `502`.\n- Calling the webhook twice with the same payload sends the PDF twice; pass idempotency keys upstream if your billing system retries webhooks."
+        "width": 520,
+        "height": 920,
+        "content": "## Stripe PDF Invoice Delivery & Failed-Payment Dunning on WhatsApp\n\n### Who this is for\nSubscription businesses, agencies, and SaaS founders using Stripe who lose revenue to unread dunning emails and want automatic WhatsApp PDF receipts on paid invoices plus interactive WhatsApp recovery polls when cards fail.\n\n### How it works\n1. **Flow A — Stripe Invoice Paid / Failed Router:**\n   - **Stripe Trigger** listens for `invoice.payment_succeeded` and `invoice.payment_failed`.\n   - Extracts the customer's WhatsApp phone from Stripe (`customer_phone` or `metadata.whatsapp`), invoice number, amount, `invoice_pdf`, and `hosted_invoice_url`.\n   - **Paid Invoices:** Downloads the official Stripe PDF into binary `data`, sends the named PDF receipt over WhatsApp via **Supergreen**, and logs `Paid` in your **Google Sheets** billing ledger.\n   - **Failed Invoices:** Logs `Past Due` in Google Sheets, sends the customer their Stripe `hosted_invoice_url` payment link on WhatsApp, and follows up with an interactive WhatsApp Poll (`Updated payment method`, `Retry in 3 days`, `Need billing help`).\n2. **Flow B — Dunning Poll Vote Handler:**\n   - **Supergreen Trigger** (`events: ['vote']`) captures the customer's poll response in real time, updates their recovery status in **Google Sheets**, confirms receipt on WhatsApp, and alerts your finance WhatsApp group whenever a customer selects `Need billing help`.\n\n### Community Node & Compatibility\n- **Community node:** `n8n-nodes-supergreen` (tested `v0.1.5` on n8n `v1.76+`) — **verified community node** available directly on **n8n Cloud** and self-hosted n8n (`https://www.npmjs.com/package/n8n-nodes-supergreen`).\n\n### Setup steps\n1. Connect **Stripe API**, **Supergreen API** (`https://supergreen.cc`), and **Google Sheets OAuth2** credentials.\n2. Create a Google Sheet tab named `Invoices` with columns: `invoiceId`, `invoiceNumber`, `phone`, `customerName`, `amount`, `status`, `recoveryNote`, `updatedAt`.\n3. Ensure your Stripe customers store a phone number (`phone` field or `metadata.whatsapp`).\n4. Update **Configure Billing Settings** and **Configure Recovery Settings** (`companyName`, `spreadsheetId`, `financeGroupChatId`)."
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000002",
-      "name": "Step 1 Note",
+      "id": "a6060006-6666-4666-8666-000000000002",
+      "name": "Stripe Flow Note",
       "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        40
+      ],
+      "parameters": {
+        "width": 1700,
+        "height": 460,
+        "color": 7,
+        "content": "## Flow A: Stripe Invoice Paid (PDF Receipt) vs. Failed (Dunning Link + Poll)\n\nRoutes paid invoices to binary PDF download + WhatsApp document delivery, and routes failed renewals to instant WhatsApp recovery links + interactive status polls while logging both to Google Sheets."
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000003",
+      "name": "Dunning Vote Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        540
+      ],
+      "parameters": {
+        "width": 1700,
+        "height": 420,
+        "color": 7,
+        "content": "## Flow B: Real-Time Dunning Poll Response & Finance Escalation\n\nUpdates the Google Sheets `Invoices` ledger when a past-due customer votes on the recovery poll and alerts the finance team's WhatsApp group if they need human billing assistance."
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000010",
+      "name": "On Stripe Invoice Event",
+      "type": "n8n-nodes-base.stripeTrigger",
       "typeVersion": 1,
       "position": [
         0,
-        80
-      ],
-      "parameters": {
-        "width": 700,
-        "height": 360,
-        "color": 7,
-        "content": "## 1. Intake, Defaults & Input Validation\n\nCentralizes editable company settings in **Configure Invoice Settings**, then normalizes `recipientPhone` and verifies that `fileUrl` uses `https://` before downloading anything."
-      }
-    },
-    {
-      "id": "b1010001-1111-4111-8111-000000000003",
-      "name": "Step 2 Note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        740,
-        80
-      ],
-      "parameters": {
-        "width": 780,
-        "height": 440,
-        "color": 7,
-        "content": "## 2. Binary PDF Fetch, WhatsApp Delivery & HTTP Receipt\n\nDownloads the PDF as binary `data` so authenticated or expiring signed URLs still work, delivers the named `.pdf` over WhatsApp via Supergreen, and returns structured JSON status codes (`200`, `400`, or `502`)."
-      }
-    },
-    {
-      "id": "b1010001-1111-4111-8111-000000000010",
-      "name": "Receive Invoice Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        40,
         240
       ],
-      "webhookId": "a9014c61-6f34-4f6b-9f1b-100000000010",
+      "webhookId": "a6060006-6666-4666-8666-100000000010",
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
       "parameters": {
-        "httpMethod": "POST",
-        "path": "whatsapp-invoice-pdf",
-        "responseMode": "responseNode",
-        "options": {}
+        "events": [
+          "invoice.payment_succeeded",
+          "invoice.payment_failed"
+        ]
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000011",
-      "name": "Configure Invoice Settings",
+      "id": "a6060006-6666-4666-8666-000000000011",
+      "name": "Configure Billing Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        260,
+        220,
         240
       ],
       "parameters": {
@@ -80,22 +86,16 @@
         "assignments": {
           "assignments": [
             {
-              "id": "cfg-company",
+              "id": "c1",
               "name": "companyName",
-              "value": "Acme Corp",
+              "value": "CloudPulse SaaS",
               "type": "string"
             },
             {
-              "id": "cfg-support",
-              "name": "supportContact",
-              "value": "Reply here if you have any billing questions.",
+              "id": "c2",
+              "name": "spreadsheetId",
+              "value": "YOUR_GOOGLE_SHEET_ID",
               "type": "string"
-            },
-            {
-              "id": "cfg-payload",
-              "name": "payload",
-              "value": "={{ $json.body || $json }}",
-              "type": "object"
             }
           ]
         },
@@ -103,25 +103,25 @@
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000012",
-      "name": "Validate and Format Invoice Payload",
+      "id": "a6060006-6666-4666-8666-000000000012",
+      "name": "Extract Invoice and Customer Phone",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        480,
+        440,
         240
       ],
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst body = item.payload || {};\nconst rawPhone = String(body.recipientPhone || '').trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nconst fileUrl = String(body.fileUrl || '').trim();\nconst invoiceNumber = String(body.invoiceNumber || 'Invoice').replace(/[^a-zA-Z0-9._-]/g, '-');\nconst customerName = String(body.customerName || 'there').trim();\nconst amountFormatted = String(body.amountFormatted || '').trim();\n\nlet validationError = '';\nif (cleanPhone.length < 8 || cleanPhone.length > 15) {\n  validationError = 'recipientPhone must be a valid international phone number (8-15 digits).';\n} else if (!fileUrl.startsWith('https://')) {\n  validationError = 'fileUrl is required and must start with https://.';\n}\n\nconst filename = `${invoiceNumber}.pdf`;\nconst amountPart = amountFormatted ? ` (${amountFormatted})` : '';\nconst caption = body.caption\n  ? String(body.caption)\n  : `Hi ${customerName}, here is your invoice ${invoiceNumber}${amountPart} from ${item.companyName}. ${item.supportContact}`;\n\nreturn [{\n  json: {\n    isValid: validationError === '',\n    validationError,\n    cleanPhone,\n    fileUrl,\n    invoiceNumber,\n    filename,\n    caption,\n  },\n}];"
+        "jsCode": "const ev = $('On Stripe Invoice Event').first().json;\nconst cfg = $('Configure Billing Settings').first().json;\nconst inv = ev.data?.object || {};\nconst rawPhone = String(inv.customer_phone || inv.metadata?.whatsapp || '').trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nconst cents = Number(inv.amount_paid || inv.amount_due || 0);\nconst currency = String(inv.currency || 'usd').toUpperCase();\nconst amountFormatted = `${(cents / 100).toFixed(2)} ${currency}`;\nconst invoiceNumber = String(inv.number || inv.id || 'Invoice').replace(/[^a-zA-Z0-9._-]/g, '-');\n\nreturn [{\n  json: {\n    eventType: String(ev.type || ''),\n    invoiceId: String(inv.id || invoiceNumber),\n    invoiceNumber,\n    cleanPhone,\n    customerName: String(inv.customer_name || 'there').trim(),\n    amountFormatted,\n    invoicePdfUrl: String(inv.invoice_pdf || ''),\n    hostedInvoiceUrl: String(inv.hosted_invoice_url || ''),\n    companyName: cfg.companyName,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000013",
-      "name": "Is Invoice Payload Valid?",
+      "id": "a6060006-6666-4666-8666-000000000013",
+      "name": "Did Invoice Payment Succeed?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        780,
+        660,
         240
       ],
       "parameters": {
@@ -133,8 +133,8 @@
           },
           "conditions": [
             {
-              "id": "cond-valid",
-              "leftValue": "={{ $json.isValid }}",
+              "id": "paid-cond",
+              "leftValue": "={{ $json.eventType === 'invoice.payment_succeeded' && $json.invoicePdfUrl.startsWith('https://') }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -149,54 +149,35 @@
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000014",
-      "name": "Return 400 Validation Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1020,
-        440
-      ],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.validationError }) }}",
-        "options": {
-          "responseCode": 400
-        }
-      }
-    },
-    {
-      "id": "b1010001-1111-4111-8111-000000000015",
-      "name": "Download Invoice PDF",
+      "id": "a6060006-6666-4666-8666-000000000014",
+      "name": "Download Stripe Invoice PDF",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1020,
-        180
+        900,
+        140
       ],
-      "onError": "continueErrorOutput",
       "parameters": {
         "method": "GET",
-        "url": "={{ $json.fileUrl }}",
+        "url": "={{ $json.invoicePdfUrl }}",
         "options": {
           "response": {
             "response": {
               "responseFormat": "file",
               "outputPropertyName": "data"
             }
-          },
-          "timeout": 15000
+          }
         }
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000016",
-      "name": "Send PDF Invoice on WhatsApp",
+      "id": "a6060006-6666-4666-8666-000000000015",
+      "name": "Send PDF Receipt on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1260,
-        120
+        1140,
+        140
       ],
       "credentials": {
         "supergreenApi": {
@@ -207,127 +188,500 @@
       "parameters": {
         "resource": "media",
         "operation": "sendMedia",
-        "toNumber": "={{ $('Validate and Format Invoice Payload').item.json.cleanPhone }}",
+        "toNumber": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
         "type": "document",
         "mediaSource": "binary",
         "binaryPropertyName": "data",
         "additionalFields": {
-          "caption": "={{ $('Validate and Format Invoice Payload').item.json.caption }}",
-          "filename": "={{ $('Validate and Format Invoice Payload').item.json.filename }}",
+          "filename": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber + '.pdf' }}",
+          "caption": "=Hi {{ $('Extract Invoice and Customer Phone').item.json.customerName }}, thank you for your payment of {{ $('Extract Invoice and Customer Phone').item.json.amountFormatted }} to {{ $('Extract Invoice and Customer Phone').item.json.companyName }}! Attached is receipt {{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber }}.",
           "mimeType": "application/pdf"
         }
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000017",
-      "name": "Return 200 Delivery Receipt",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "a6060006-6666-4666-8666-000000000016",
+      "name": "Log Paid Invoice in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
       "position": [
-        1500,
-        120
+        1380,
+        140
       ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, recipient: $('Validate and Format Invoice Payload').item.json.cleanPhone, invoiceNumber: $('Validate and Format Invoice Payload').item.json.invoiceNumber, filename: $('Validate and Format Invoice Payload').item.json.filename }) }}",
-        "options": {
-          "responseCode": 200
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Extract Invoice and Customer Phone').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoiceId": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceId }}",
+            "invoiceNumber": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber }}",
+            "phone": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
+            "customerName": "={{ $('Extract Invoice and Customer Phone').item.json.customerName }}",
+            "amount": "={{ $('Extract Invoice and Customer Phone').item.json.amountFormatted }}",
+            "status": "Paid",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "invoiceId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000017",
+      "name": "Send Stripe Retry Link on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        900,
+        340
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Hi {{ $json.customerName }}, your payment of {{ $json.amountFormatted }} for {{ $json.companyName }} ({{ $json.invoiceNumber }}) didn't go through. You can update your card securely here: {{ $json.hostedInvoiceUrl }}",
+        "additionalFields": {
+          "linkPreview": true
         }
       }
     },
     {
-      "id": "b1010001-1111-4111-8111-000000000018",
-      "name": "Return 502 PDF Download Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "a6060006-6666-4666-8666-000000000018",
+      "name": "Send Dunning Follow-Up Poll",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
       "position": [
-        1260,
-        300
+        1140,
+        340
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
+        "name": "Let us know how you'd like to handle this invoice:",
+        "options": "Updated payment method, Retry in 3 days, Need billing help"
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000019",
+      "name": "Log Past-Due Invoice in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1380,
+        340
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Extract Invoice and Customer Phone').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoiceId": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceId }}",
+            "invoiceNumber": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber }}",
+            "phone": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
+            "customerName": "={{ $('Extract Invoice and Customer Phone').item.json.customerName }}",
+            "amount": "={{ $('Extract Invoice and Customer Phone').item.json.amountFormatted }}",
+            "status": "Past Due",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "invoiceId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000020",
+      "name": "When Customer Votes on Dunning Poll",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        720
+      ],
+      "webhookId": "a6060006-6666-4666-8666-200000000020",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "vote"
+        ],
+        "onlyIncoming": true
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000021",
+      "name": "Configure Recovery Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        720
       ],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, error: \"Failed to download PDF from fileUrl\", details: $json.error?.message || \"Upstream error\" }) }}",
-        "options": {
-          "responseCode": 502
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "spreadsheetId",
+              "value": "YOUR_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "r2",
+              "name": "financeGroupChatId",
+              "value": "YOUR_FINANCE_GROUP_ID@g.us",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000022",
+      "name": "Parse Dunning Poll Choice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        720
+      ],
+      "parameters": {
+        "jsCode": "const ev = $('When Customer Votes on Dunning Poll').first().json;\nconst cfg = $('Configure Recovery Settings').first().json;\nconst idx = Array.isArray(ev.vote?.selectedOptionIndices) ? Number(ev.vote.selectedOptionIndices[0]) : -1;\nconst chatId = String(ev.chat?.id || '');\nconst cleanPhone = chatId.replace(/@.*$/, '').replace(/\\D/g, '');\nif (!cleanPhone || idx < 0 || idx > 2) return [];\n\nconst labels = ['Card Updated by Customer', 'Retry Requested in 3 Days', 'Billing Help Requested'];\nconst replies = [\n  'Thank you! Stripe will automatically confirm your updated payment method and send your PDF receipt shortly.',\n  'Got it — we noted your request and no service interruption will occur in the meantime.',\n  'A member of our billing team has been notified and will reply here shortly to help.',\n];\nreturn [{\n  json: {\n    chatId,\n    cleanPhone,\n    recoveryNote: labels[idx],\n    replyText: replies[idx],\n    needsFinanceHelp: idx === 2 && cfg.financeGroupChatId !== 'YOUR_FINANCE_GROUP_ID@g.us',\n    financeGroupChatId: cfg.financeGroupChatId,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000023",
+      "name": "Update Recovery Note in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        680,
+        720
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
         }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $json.cleanPhone }}",
+            "recoveryNote": "={{ $json.recoveryNote }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "phone"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000024",
+      "name": "Confirm Poll Choice on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        920,
+        720
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Parse Dunning Poll Choice').item.json.chatId }}",
+        "message": "={{ $('Parse Dunning Poll Choice').item.json.replyText }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000025",
+      "name": "Did Customer Ask for Billing Help?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        720
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "fin-help",
+              "leftValue": "={{ $('Parse Dunning Poll Choice').item.json.needsFinanceHelp }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6060006-6666-4666-8666-000000000026",
+      "name": "Alert Finance WhatsApp Group",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        660
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Parse Dunning Poll Choice').item.json.financeGroupChatId }}",
+        "message": "=Billing assistance requested on WhatsApp by +{{ $('Parse Dunning Poll Choice').item.json.cleanPhone }}. Check the Invoices sheet to follow up.",
+        "additionalFields": {}
       }
     }
   ],
   "connections": {
-    "Receive Invoice Webhook": {
+    "On Stripe Invoice Event": {
       "main": [
         [
           {
-            "node": "Configure Invoice Settings",
+            "node": "Configure Billing Settings",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Configure Invoice Settings": {
+    "Configure Billing Settings": {
       "main": [
         [
           {
-            "node": "Validate and Format Invoice Payload",
+            "node": "Extract Invoice and Customer Phone",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate and Format Invoice Payload": {
+    "Extract Invoice and Customer Phone": {
       "main": [
         [
           {
-            "node": "Is Invoice Payload Valid?",
+            "node": "Did Invoice Payment Succeed?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is Invoice Payload Valid?": {
+    "Did Invoice Payment Succeed?": {
       "main": [
         [
           {
-            "node": "Download Invoice PDF",
+            "node": "Download Stripe Invoice PDF",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Return 400 Validation Error",
+            "node": "Send Stripe Retry Link on WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Download Invoice PDF": {
+    "Download Stripe Invoice PDF": {
       "main": [
         [
           {
-            "node": "Send PDF Invoice on WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Return 502 PDF Download Error",
+            "node": "Send PDF Receipt on WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send PDF Invoice on WhatsApp": {
+    "Send PDF Receipt on WhatsApp": {
       "main": [
         [
           {
-            "node": "Return 200 Delivery Receipt",
+            "node": "Log Paid Invoice in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Stripe Retry Link on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Send Dunning Follow-Up Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Dunning Follow-Up Poll": {
+      "main": [
+        [
+          {
+            "node": "Log Past-Due Invoice in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Customer Votes on Dunning Poll": {
+      "main": [
+        [
+          {
+            "node": "Configure Recovery Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configure Recovery Settings": {
+      "main": [
+        [
+          {
+            "node": "Parse Dunning Poll Choice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Dunning Poll Choice": {
+      "main": [
+        [
+          {
+            "node": "Update Recovery Note in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Recovery Note in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Confirm Poll Choice on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Poll Choice on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Did Customer Ask for Billing Help?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did Customer Ask for Billing Help?": {
+      "main": [
+        [
+          {
+            "node": "Alert Finance WhatsApp Group",
             "type": "main",
             "index": 0
           }

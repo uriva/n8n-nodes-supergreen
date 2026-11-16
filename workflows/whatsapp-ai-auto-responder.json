@@ -1,79 +1,63 @@
 {
-  "name": "WhatsApp AI Support and Lead Qualification Agent with Human Escalation",
+  "name": "Handle WhatsApp Voice, Image, and Text Support Inquiries with OpenAI, Google Sheets CRM, and Supergreen",
   "nodes": [
     {
-      "id": "c2020002-2222-4222-8222-000000000001",
+      "id": "f5050005-5555-4555-8555-000000000001",
       "name": "Workflow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -540,
-        60
+        -600,
+        40
       ],
       "parameters": {
-        "width": 480,
-        "height": 820,
-        "content": "## WhatsApp AI Support & Lead Qualification Agent with Human Escalation\n\n### Who this is for\nSmall businesses, clinics, and B2B teams running support or inbound sales on a regular WhatsApp number who want instant AI replies with conversation memory — plus automatic escalation to an internal WhatsApp team group when a human is needed.\n\n### How it works\n1. **When WhatsApp Message Arrives** (`Supergreen Trigger`) receives real-time incoming messages and ignores bot echoes (`onlyIncoming: true`).\n2. **Configure Agent Settings** defines your business context, pricing/FAQ rules, and optional internal escalation WhatsApp group ID.\n3. **Is Direct Text Inquiry?** filters out empty media-only events and skips `@g.us` group chatter when `ignoreGroupChats` is enabled.\n4. **Show Typing Indicator** displays native WhatsApp typing state while the LLM thinks.\n5. **Support & Lead Qualification Agent** uses **OpenAI (`gpt-4o-mini`)** + **Window Buffer Memory** (keyed per WhatsApp `chat.id`) to answer FAQs, qualify leads, and tag `[ESCALATE]` when a customer requests a human, refund, or custom quote.\n6. **Parse Reply & Escalation Flag** strips internal tags, sends a quoted WhatsApp reply to the customer, and alerts your team's WhatsApp group when escalation is triggered.\n\n### Requirements & Community Node\n- **Community node:** `n8n-nodes-supergreen` (tested on `v0.1.5`, verified community node available on **n8n Cloud** and self-hosted n8n — [npm & install guide](https://www.npmjs.com/package/n8n-nodes-supergreen)).\n- **Supergreen API** credential from [supergreen.cc](https://supergreen.cc) and an **OpenAI API** credential.\n- Tested on n8n `v1.76+`.\n\n### Setup steps\n1. Configure your **Supergreen API** and **OpenAI API** credentials.\n2. Edit **Configure Agent Settings**: replace `businessName`, `knowledgeBase`, and `escalationGroupChatId` (use Supergreen's *Group -> List* operation to find your team's `@g.us` ID, or leave blank to skip group alerts).\n3. Activate the workflow — the webhook registers automatically on your Supergreen WhatsApp line.\n\n### Limitations & notes\n- In-memory Window Buffer resets if n8n restarts; swap for Postgres/Redis Chat Memory for persistent history."
+        "width": 520,
+        "height": 920,
+        "content": "## Multimodal WhatsApp AI Support & Lead CRM (Voice, Image & Text)\n\n### Who this is for\nE-commerce brands, clinics, and B2B service teams handling inbound WhatsApp inquiries where customers frequently send **voice notes** or **photos/screenshots** alongside text — without Meta Cloud API template locks.\n\n### What problem it solves\nText-only WhatsApp bots break as soon as a customer sends a voice message or a photo of a damaged item/error screen. This workflow handles all three modalities end-to-end, logs structured leads & tickets to Google Sheets, and escalates urgent cases to your team's WhatsApp group:\n1. **Inbound Multimodal Router:** Receives real-time messages via **Supergreen Trigger** (`onlyIncoming: true`), ignores `@g.us` group chatter, displays a WhatsApp typing indicator, and inspects `attachments` to route **Audio/Voice Notes**, **Images**, or **Plain Text**.\n2. **Voice & Vision Pre-Processing:** Downloads voice notes from the signed attachment URL and transcribes them with **OpenAI Whisper**; analyzes customer images/screenshots with **OpenAI Vision (`gpt-4o-mini`)**; merges everything into a unified customer prompt.\n3. **AI Support & Lead Triage Agent:** Uses **OpenAI (`gpt-4o-mini`)** + **Window Buffer Memory** (per `chat.id`) + **Structured Output Parser** to produce a concise WhatsApp reply plus structured classification (`category`: `faq | sales_lead | human_escalation`, `summary`, `priority`).\n4. **CRM Logging & Human Handoff:** Replies on WhatsApp quoting the customer's message, appends `sales_lead` and `human_escalation` rows to **Google Sheets**, and alerts your internal staff WhatsApp group when human intervention is needed.\n\n### Community Node & Compatibility\n- **Community node:** `n8n-nodes-supergreen` (tested `v0.1.5` on n8n `v1.76+`) — **verified community node** available directly on **n8n Cloud** and self-hosted n8n (`https://www.npmjs.com/package/n8n-nodes-supergreen`).\n\n### Setup steps\n1. Connect **Supergreen API** (`https://supergreen.cc`), **OpenAI API**, and **Google Sheets OAuth2** credentials.\n2. Create a Google Sheet tab named `Inquiries` with columns: `timestamp`, `phone`, `senderName`, `modality`, `category`, `priority`, `summary`, `customerInput`.\n3. Update **Configure Support Settings** with your `businessName`, `knowledgeBase`, `spreadsheetId`, and `escalationGroupChatId` (`YOUR_TEAM_GROUP_ID@g.us`).\n4. Activate the workflow."
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000002",
-      "name": "Intake Sticky",
+      "id": "f5050005-5555-4555-8555-000000000002",
+      "name": "Modality Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -20,
-        60
+        -40,
+        40
       ],
       "parameters": {
-        "width": 680,
-        "height": 360,
+        "width": 1180,
+        "height": 540,
         "color": 7,
-        "content": "## 1. Inbound Trigger, Settings & Chat Filtering\n\nCaptures incoming WhatsApp messages, loads editable business context, and filters out empty events or group chatter so the AI only replies to direct customer inquiries."
+        "content": "## 1. Inbound Trigger, Modality Detection & Voice/Vision Extraction\n\nFilters direct customer chats, shows a native WhatsApp typing indicator, and routes audio voice notes to OpenAI Whisper or images to OpenAI Vision before unifying the message text."
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000003",
-      "name": "AI Sticky",
+      "id": "f5050005-5555-4555-8555-000000000003",
+      "name": "Agent Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        700,
-        60
+        1180,
+        40
       ],
       "parameters": {
-        "width": 620,
-        "height": 520,
+        "width": 1240,
+        "height": 580,
         "color": 7,
-        "content": "## 2. Typing State & Context-Aware AI Agent\n\nSends a native WhatsApp typing indicator, then runs the LangChain Agent with per-sender memory (`chat.id`) and structured `[ESCALATE]` detection."
+        "content": "## 2. Structured AI Triage, Quoted WhatsApp Reply, Google Sheets CRM & Team Escalation\n\nGenerates a conversational reply + structured triage JSON, replies to the customer on WhatsApp, logs leads/escalations to Google Sheets, and notifies the team WhatsApp group for urgent handoffs."
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000004",
-      "name": "Delivery Sticky",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1360,
-        60
-      ],
-      "parameters": {
-        "width": 720,
-        "height": 440,
-        "color": 7,
-        "content": "## 3. Quoted Customer Reply & Team Escalation\n\nStrips internal tags, replies directly quoting the customer's WhatsApp message, and notifies your internal support group whenever human follow-up is required."
-      }
-    },
-    {
-      "id": "c2020002-2222-4222-8222-000000000010",
-      "name": "When WhatsApp Message Arrives",
+      "id": "f5050005-5555-4555-8555-000000000010",
+      "name": "When Customer Message Arrives",
       "type": "n8n-nodes-supergreen.supergreenTrigger",
       "typeVersion": 1,
       "position": [
-        20,
-        220
+        0,
+        260
       ],
-      "webhookId": "c2020002-2222-4222-8222-100000000010",
+      "webhookId": "f5050005-5555-4555-8555-100000000010",
       "credentials": {
         "supergreenApi": {
           "id": "supergreen-cred",
@@ -89,13 +73,13 @@
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000011",
-      "name": "Configure Agent Settings",
+      "id": "f5050005-5555-4555-8555-000000000011",
+      "name": "Configure Support Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        240,
-        220
+        220,
+        260
       ],
       "parameters": {
         "mode": "manual",
@@ -103,28 +87,28 @@
         "assignments": {
           "assignments": [
             {
-              "id": "set-biz",
+              "id": "s1",
               "name": "businessName",
-              "value": "Acme Studio",
+              "value": "Northstar Gear",
               "type": "string"
             },
             {
-              "id": "set-kb",
+              "id": "s2",
               "name": "knowledgeBase",
-              "value": "Hours: Mon-Fri 9am-6pm EST. Starter plan: $29/mo, Pro plan: $99/mo. Free 7-day trial available.",
+              "value": "Support hours: Mon-Fri 9am-6pm UTC. Free shipping on orders over $75. 30-day returns on unused items. Wholesale inquiries (10+ units) qualify for 20% off.",
               "type": "string"
             },
             {
-              "id": "set-group",
+              "id": "s3",
+              "name": "spreadsheetId",
+              "value": "YOUR_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "s4",
               "name": "escalationGroupChatId",
-              "value": "YOUR_ESCALATION_GROUP_ID@g.us",
+              "value": "YOUR_TEAM_GROUP_ID@g.us",
               "type": "string"
-            },
-            {
-              "id": "set-ignore-groups",
-              "name": "ignoreGroupChats",
-              "value": true,
-              "type": "boolean"
             }
           ]
         },
@@ -132,56 +116,26 @@
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000012",
-      "name": "Is Direct Text Inquiry?",
-      "type": "n8n-nodes-base.if",
+      "id": "f5050005-5555-4555-8555-000000000012",
+      "name": "Detect Modality and Filter Direct Chats",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
-        220
+        440,
+        260
       ],
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "cond-has-text",
-              "leftValue": "={{ ($('When WhatsApp Message Arrives').item.json.text || '').trim().length > 0 }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            },
-            {
-              "id": "cond-not-group",
-              "leftValue": "={{ !$json.ignoreGroupChats || !String($('When WhatsApp Message Arrives').item.json.chat?.id || '').endsWith('@g.us') }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+        "jsCode": "const ev = $('When Customer Message Arrives').first().json;\nconst cfg = $('Configure Support Settings').first().json;\nconst chatId = String(ev.chat?.id || '');\nif (!chatId || chatId.endsWith('@g.us')) return [];\n\nconst attachments = Array.isArray(ev.attachments) ? ev.attachments : [];\nconst firstAtt = attachments[0] || null;\nconst mime = String(firstAtt?.mimeType || '').toLowerCase();\nconst fileUri = String(firstAtt?.fileUri || '');\nconst text = String(ev.text || firstAtt?.caption || '').trim();\n\nlet modality = 'text';\nif (fileUri && mime.startsWith('audio/')) modality = 'audio';\nelse if (fileUri && mime.startsWith('image/')) modality = 'image';\n\nif (modality === 'text' && !text) return [];\n\nreturn [{\n  json: {\n    chatId,\n    cleanPhone: chatId.replace(/@.*$/, ''),\n    senderName: String(ev.author?.username || ev.chat?.title || chatId.replace(/@.*$/, '')),\n    messageId: String(ev.messageId || ''),\n    modality,\n    text,\n    fileUri,\n    mimeType: mime,\n    businessName: cfg.businessName,\n    knowledgeBase: cfg.knowledgeBase,\n    spreadsheetId: cfg.spreadsheetId,\n    escalationGroupChatId: cfg.escalationGroupChatId,\n  },\n}];"
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000013",
-      "name": "Show Typing Indicator",
+      "id": "f5050005-5555-4555-8555-000000000013",
+      "name": "Show WhatsApp Typing Indicator",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        740,
-        220
+        660,
+        260
       ],
       "credentials": {
         "supergreenApi": {
@@ -192,35 +146,210 @@
       "parameters": {
         "resource": "message",
         "operation": "sendTyping",
-        "toNumber": "={{ $('When WhatsApp Message Arrives').item.json.chat.id }}",
-        "duration": 4000
+        "toNumber": "={{ $json.chatId }}",
+        "duration": 5000
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000014",
-      "name": "Support and Lead Qualification Agent",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.7,
+      "id": "f5050005-5555-4555-8555-000000000014",
+      "name": "Route by Message Modality",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
       "position": [
-        980,
-        220
+        880,
+        260
       ],
       "parameters": {
-        "promptType": "define",
-        "text": "={{ $('When WhatsApp Message Arrives').item.json.text }}",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "mod-audio",
+                    "leftValue": "={{ $('Detect Modality and Filter Direct Chats').item.json.modality }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voice Note"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "mod-image",
+                    "leftValue": "={{ $('Detect Modality and Filter Direct Chats').item.json.modality }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "mod-text",
+                    "leftValue": "={{ $('Detect Modality and Filter Direct Chats').item.json.modality }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000015",
+      "name": "Download Voice Note Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        120
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Detect Modality and Filter Direct Chats').item.json.fileUri }}",
         "options": {
-          "systemMessage": "=You are the WhatsApp assistant for {{ $('Configure Agent Settings').item.json.businessName }}.\nBusiness facts: {{ $('Configure Agent Settings').item.json.knowledgeBase }}\n\nRules:\n1. Keep replies friendly, accurate, and concise (under 90 words) formatted cleanly for WhatsApp.\n2. When a prospect asks about pricing or services, answer their question and ask one brief qualifying question (use case or team size).\n3. If the user asks for a human agent, a billing refund, or a custom enterprise contract, start your response with the exact token [ESCALATE] followed by a polite reassurance that a teammate is joining shortly."
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
         }
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000015",
+      "id": "f5050005-5555-4555-8555-000000000016",
+      "name": "Transcribe Voice Note with Whisper",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1300,
+        120
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      },
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "binaryPropertyName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000017",
+      "name": "Analyze Customer Image with Vision",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1200,
+        260
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      },
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "text": "=Describe what the customer is showing in this image (product issue, receipt, order number, or screenshot) so support can assist them. Customer caption: {{ $('Detect Modality and Filter Direct Chats').item.json.text || 'none' }}",
+        "inputType": "url",
+        "imageUrls": "={{ $('Detect Modality and Filter Direct Chats').item.json.fileUri }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000018",
+      "name": "Build Unified Customer Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        260
+      ],
+      "parameters": {
+        "jsCode": "const meta = $('Detect Modality and Filter Direct Chats').first().json;\nconst current = $input.first().json;\nlet normalizedInput = meta.text;\nif (meta.modality === 'audio') {\n  normalizedInput = `[Voice note transcript]: ${current.text || ''}`;\n} else if (meta.modality === 'image') {\n  const visionText = current.content || current.text || JSON.stringify(current);\n  normalizedInput = `[Customer sent an image. Caption: \"${meta.text || 'none'}\". Visual analysis: ${visionText}]`;\n}\nreturn [{ json: { ...meta, normalizedInput } }];"
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000019",
+      "name": "Support and Triage AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1720,
+        260
+      ],
+      "hasOutputParser": true,
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.normalizedInput }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are the WhatsApp support & sales assistant for {{ $json.businessName }}.\nKnowledge base: {{ $json.knowledgeBase }}\n\nRespond with helpful, concise WhatsApp-friendly answers (under 90 words).\nClassify every message into one category:\n- \"faq\": standard question answered from the knowledge base\n- \"sales_lead\": wholesale, bulk order, pricing quote, or partnership inquiry\n- \"human_escalation\": damaged item photo, refund dispute, angry customer, or explicit request for a human agent."
+        }
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000020",
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        940,
-        420
+        1660,
+        460
       ],
       "credentials": {
         "openAiApi": {
@@ -236,46 +365,46 @@
           "cachedResultName": "gpt-4o-mini"
         },
         "options": {
-          "temperature": 0.3
+          "temperature": 0.2
         }
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000016",
-      "name": "WhatsApp Conversation Memory",
+      "id": "f5050005-5555-4555-8555-000000000021",
+      "name": "Per-Customer Chat Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        1120,
-        420
+        1800,
+        460
       ],
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('When WhatsApp Message Arrives').item.json.chat.id }}",
+        "sessionKey": "={{ $('Build Unified Customer Prompt').item.json.chatId }}",
         "contextWindowLength": 10
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000017",
-      "name": "Parse Reply and Escalation Flag",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "f5050005-5555-4555-8555-000000000022",
+      "name": "Structured Triage Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
       "position": [
-        1400,
-        220
+        1940,
+        460
       ],
       "parameters": {
-        "jsCode": "const rawOutput = String($input.first().json.output || '').trim();\nconst trigger = $('When WhatsApp Message Arrives').first().json;\nconst settings = $('Configure Agent Settings').first().json;\nconst needsEscalation = rawOutput.includes('[ESCALATE]');\nconst cleanReply = rawOutput.replace(/\\[ESCALATE\\]\\s*/g, '').trim() || 'Thanks for reaching out! A teammate will follow up shortly.';\nconst groupTarget = String(settings.escalationGroupChatId || '').trim();\nconst shouldNotifyGroup = needsEscalation && groupTarget !== '' && groupTarget !== 'YOUR_ESCALATION_GROUP_ID@g.us';\n\nreturn [{\n  json: {\n    chatId: trigger.chat.id,\n    senderName: trigger.author?.username || trigger.chat?.title || trigger.chat.id,\n    customerMessage: trigger.text,\n    quotedMessageId: trigger.messageId || '',\n    cleanReply,\n    needsEscalation,\n    shouldNotifyGroup,\n    escalationGroupChatId: groupTarget,\n  },\n}];"
+        "jsonSchemaExample": "{\"reply\":\"Thanks for sending that over! Here is how we can help...\",\"category\":\"sales_lead\",\"priority\":\"medium\",\"summary\":\"Customer asked for wholesale pricing on 25 units.\"}"
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000018",
+      "id": "f5050005-5555-4555-8555-000000000023",
       "name": "Send Quoted Reply on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1620,
-        220
+        2020,
+        260
       ],
       "credentials": {
         "supergreenApi": {
@@ -286,21 +415,21 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $json.chatId }}",
-        "message": "={{ $json.cleanReply }}",
+        "toNumber": "={{ $('Build Unified Customer Prompt').item.json.chatId }}",
+        "message": "={{ $json.output.reply }}",
         "additionalFields": {
-          "quotedMessageId": "={{ $json.quotedMessageId }}"
+          "quotedMessageId": "={{ $('Build Unified Customer Prompt').item.json.messageId }}"
         }
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000019",
-      "name": "Needs Team Escalation?",
+      "id": "f5050005-5555-4555-8555-000000000024",
+      "name": "Is Lead or Escalation?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1840,
-        220
+        2240,
+        260
       ],
       "parameters": {
         "conditions": {
@@ -311,8 +440,8 @@
           },
           "conditions": [
             {
-              "id": "cond-escalate",
-              "leftValue": "={{ $('Parse Reply and Escalation Flag').item.json.shouldNotifyGroup }}",
+              "id": "is-actionable",
+              "leftValue": "={{ ['sales_lead', 'human_escalation'].includes($('Support and Triage AI Agent').item.json.output.category) }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -327,13 +456,89 @@
       }
     },
     {
-      "id": "c2020002-2222-4222-8222-000000000020",
+      "id": "f5050005-5555-4555-8555-000000000025",
+      "name": "Log Lead or Ticket to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2460,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Build Unified Customer Prompt').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inquiries",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "phone": "={{ $('Build Unified Customer Prompt').item.json.cleanPhone }}",
+            "senderName": "={{ $('Build Unified Customer Prompt').item.json.senderName }}",
+            "modality": "={{ $('Build Unified Customer Prompt').item.json.modality }}",
+            "category": "={{ $('Support and Triage AI Agent').item.json.output.category }}",
+            "priority": "={{ $('Support and Triage AI Agent').item.json.output.priority }}",
+            "summary": "={{ $('Support and Triage AI Agent').item.json.output.summary }}",
+            "customerInput": "={{ $('Build Unified Customer Prompt').item.json.normalizedInput }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000026",
+      "name": "Requires Immediate Team Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-esc",
+              "leftValue": "={{ $('Support and Triage AI Agent').item.json.output.category === 'human_escalation' && $('Build Unified Customer Prompt').item.json.escalationGroupChatId !== 'YOUR_TEAM_GROUP_ID@g.us' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f5050005-5555-4555-8555-000000000027",
       "name": "Alert Support Group on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        2060,
-        160
+        2900,
+        140
       ],
       "credentials": {
         "supergreenApi": {
@@ -344,51 +549,120 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $('Parse Reply and Escalation Flag').item.json.escalationGroupChatId }}",
-        "message": "=Escalation requested on WhatsApp\nFrom: {{ $('Parse Reply and Escalation Flag').item.json.senderName }} ({{ $('Parse Reply and Escalation Flag').item.json.chatId }})\nMessage: \"{{ $('Parse Reply and Escalation Flag').item.json.customerMessage }}\"",
+        "toNumber": "={{ $('Build Unified Customer Prompt').item.json.escalationGroupChatId }}",
+        "message": "=Urgent WhatsApp escalation ({{ $('Support and Triage AI Agent').item.json.output.priority }})\nCustomer: {{ $('Build Unified Customer Prompt').item.json.senderName }} (+{{ $('Build Unified Customer Prompt').item.json.cleanPhone }})\nSummary: {{ $('Support and Triage AI Agent').item.json.output.summary }}",
         "additionalFields": {}
       }
     }
   ],
   "connections": {
-    "When WhatsApp Message Arrives": {
+    "When Customer Message Arrives": {
       "main": [
         [
           {
-            "node": "Configure Agent Settings",
+            "node": "Configure Support Settings",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Configure Agent Settings": {
+    "Configure Support Settings": {
       "main": [
         [
           {
-            "node": "Is Direct Text Inquiry?",
+            "node": "Detect Modality and Filter Direct Chats",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is Direct Text Inquiry?": {
+    "Detect Modality and Filter Direct Chats": {
       "main": [
         [
           {
-            "node": "Show Typing Indicator",
+            "node": "Show WhatsApp Typing Indicator",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Show Typing Indicator": {
+    "Show WhatsApp Typing Indicator": {
       "main": [
         [
           {
-            "node": "Support and Lead Qualification Agent",
+            "node": "Route by Message Modality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Message Modality": {
+      "main": [
+        [
+          {
+            "node": "Download Voice Note Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze Customer Image with Vision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Unified Customer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice Note Audio": {
+      "main": [
+        [
+          {
+            "node": "Transcribe Voice Note with Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Voice Note with Whisper": {
+      "main": [
+        [
+          {
+            "node": "Build Unified Customer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Customer Image with Vision": {
+      "main": [
+        [
+          {
+            "node": "Build Unified Customer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Unified Customer Prompt": {
+      "main": [
+        [
+          {
+            "node": "Support and Triage AI Agent",
             "type": "main",
             "index": 0
           }
@@ -399,36 +673,36 @@
       "ai_languageModel": [
         [
           {
-            "node": "Support and Lead Qualification Agent",
+            "node": "Support and Triage AI Agent",
             "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "WhatsApp Conversation Memory": {
+    "Per-Customer Chat Memory": {
       "ai_memory": [
         [
           {
-            "node": "Support and Lead Qualification Agent",
+            "node": "Support and Triage AI Agent",
             "type": "ai_memory",
             "index": 0
           }
         ]
       ]
     },
-    "Support and Lead Qualification Agent": {
-      "main": [
+    "Structured Triage Output Parser": {
+      "ai_outputParser": [
         [
           {
-            "node": "Parse Reply and Escalation Flag",
-            "type": "main",
+            "node": "Support and Triage AI Agent",
+            "type": "ai_outputParser",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Reply and Escalation Flag": {
+    "Support and Triage AI Agent": {
       "main": [
         [
           {
@@ -443,14 +717,36 @@
       "main": [
         [
           {
-            "node": "Needs Team Escalation?",
+            "node": "Is Lead or Escalation?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Needs Team Escalation?": {
+    "Is Lead or Escalation?": {
+      "main": [
+        [
+          {
+            "node": "Log Lead or Ticket to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Lead or Ticket to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Requires Immediate Team Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requires Immediate Team Alert?": {
       "main": [
         [
           {
