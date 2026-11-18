@@ -1,55 +1,55 @@
 {
-  "name": "Handle WhatsApp Voice, Image, and Text Support Inquiries with OpenAI, Google Sheets CRM, and Supergreen",
+  "name": "Handle WhatsApp voice, image and text support with OpenAI and Google Sheets",
   "nodes": [
     {
-      "id": "f5050005-5555-4555-8555-000000000001",
+      "id": "c8080008-8888-4888-8888-000000000001",
       "name": "Workflow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -600,
+        -680,
         40
       ],
       "parameters": {
-        "width": 520,
-        "height": 920,
-        "content": "## Multimodal WhatsApp AI Support & Lead CRM (Voice, Image & Text)\n\n### Who this is for\nE-commerce brands, clinics, and B2B service teams handling inbound WhatsApp inquiries where customers frequently send **voice notes** or **photos/screenshots** alongside text — without Meta Cloud API template locks.\n\n### What problem it solves\nText-only WhatsApp bots break as soon as a customer sends a voice message or a photo of a damaged item/error screen. This workflow handles all three modalities end-to-end, logs structured leads & tickets to Google Sheets, and escalates urgent cases to your team's WhatsApp group:\n1. **Inbound Multimodal Router:** Receives real-time messages via **Supergreen Trigger** (`onlyIncoming: true`), ignores `@g.us` group chatter, displays a WhatsApp typing indicator, and inspects `attachments` to route **Audio/Voice Notes**, **Images**, or **Plain Text**.\n2. **Voice & Vision Pre-Processing:** Downloads voice notes from the signed attachment URL and transcribes them with **OpenAI Whisper**; analyzes customer images/screenshots with **OpenAI Vision (`gpt-4o-mini`)**; merges everything into a unified customer prompt.\n3. **AI Support & Lead Triage Agent:** Uses **OpenAI (`gpt-4o-mini`)** + **Window Buffer Memory** (per `chat.id`) + **Structured Output Parser** to produce a concise WhatsApp reply plus structured classification (`category`: `faq | sales_lead | human_escalation`, `summary`, `priority`).\n4. **CRM Logging & Human Handoff:** Replies on WhatsApp quoting the customer's message, appends `sales_lead` and `human_escalation` rows to **Google Sheets**, and alerts your internal staff WhatsApp group when human intervention is needed.\n\n### Community Node & Compatibility\n- **Community node:** `n8n-nodes-supergreen` (tested `v0.1.5` on n8n `v1.76+`) — **verified community node** available directly on **n8n Cloud** and self-hosted n8n (`https://www.npmjs.com/package/n8n-nodes-supergreen`).\n\n### Setup steps\n1. Connect **Supergreen API** (`https://supergreen.cc`), **OpenAI API**, and **Google Sheets OAuth2** credentials.\n2. Create a Google Sheet tab named `Inquiries` with columns: `timestamp`, `phone`, `senderName`, `modality`, `category`, `priority`, `summary`, `customerInput`.\n3. Update **Configure Support Settings** with your `businessName`, `knowledgeBase`, `spreadsheetId`, and `escalationGroupChatId` (`YOUR_TEAM_GROUP_ID@g.us`).\n4. Activate the workflow."
+        "width": 560,
+        "height": 1180,
+        "content": "## Multimodal WhatsApp Support, Live Order Tool-Calling & Human Takeover Engine\n\n### Who this is for\nE-commerce and service operations teams handling inbound WhatsApp messages (voice notes, product/receipt photos, and text) who need tool-grounded answers from live order & policy tables plus clean human-agent takeover without the AI talking over staff.\n\n### Architecture (3 Coordinated Flows)\n1. **Flow 1 - Deduplication, Human-Takeover Gate & Multimodal Pre-Processing:**\n   - **Supergreen Trigger** (`message`, `onlyIncoming: true`) deduplicates webhook retries via **Remove Duplicates**.\n   - **Human-Takeover Gate:** Looks up the customer's phone in the **Google Sheets** `Tickets` tab first. When `status === 'Human Assigned'`, the workflow bypasses the AI completely and forwards the customer's message straight to your internal support WhatsApp group so staff and AI never talk over each other.\n   - **Voice & Vision Extraction:** Sends a native WhatsApp typing indicator, downloads & transcribes audio voice notes via **OpenAI Whisper**, and inspects customer photos/receipts via **OpenAI Vision (`gpt-4o-mini`)**.\n   - **Tool-Calling AI Operations Agent:** Uses **OpenAI (`gpt-4o-mini`)** + **Window Memory** + **Structured Output Parser** + **3 live Google Sheets Tools**:\n     - `Lookup Customer Orders` (reads live shipping/order status from `Orders`)\n     - `Search Support Policies` (retrieves verified policies from `KnowledgeBase`)\n     - `Create Return or Action Request` (logs structured RMA/change rows into `OrderActions`)\n   - **Escalation Poll:** Replies to the customer quoting their message, upserts `Tickets`, and when human help is needed, posts a 3-option **Agent Action Poll** (`Claim ticket - pause AI`, `Mark resolved - resume AI`, `Flag urgent refund`) to the support group.\n2. **Flow 2 - Staff Poll Takeover & Resolution Loop (`Supergreen Trigger` on `vote`):**\n   - Matches staff poll votes back to the ticket via `escalationPollId`, toggles `Human Assigned` vs `Resolved` in Google Sheets, and notifies the customer on WhatsApp when resolved.\n3. **Flow 3 - Daily Unresolved SLA Digest (`Schedule Trigger`):**\n   - Audits open `Escalated` / `Human Assigned` tickets older than 4 hours each morning and sends an SLA summary to the support WhatsApp group.\n\n### Google Sheets Tabs Required\n- `Orders`: `orderId`, `phone`, `status`, `carrier`, `trackingUrl`, `items`, `orderDate`\n- `KnowledgeBase`: `topic`, `question`, `policyAnswer`, `updatedAt`\n- `OrderActions`: `createdAt`, `phone`, `orderId`, `actionType`, `reason`\n- `Tickets`: `phone`, `senderName`, `status`, `priority`, `intent`, `summary`, `escalationPollId`, `updatedAt`"
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000002",
-      "name": "Modality Sticky",
+      "id": "c8080008-8888-4888-8888-000000000002",
+      "name": "Flow 1 Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -40,
+        -80,
         40
       ],
       "parameters": {
-        "width": 1180,
-        "height": 540,
+        "width": 2880,
+        "height": 680,
         "color": 7,
-        "content": "## 1. Inbound Trigger, Modality Detection & Voice/Vision Extraction\n\nFilters direct customer chats, shows a native WhatsApp typing indicator, and routes audio voice notes to OpenAI Whisper or images to OpenAI Vision before unifying the message text."
+        "content": "## Flow 1: Human-Takeover Check, Voice/Vision Extraction, Multi-Tool AI Agent & Staff Escalation Poll\n\nChecks whether a human agent owns the conversation before running AI, transcribes voice notes, analyzes product photos, queries live `Orders` and `KnowledgeBase` sheets via `ai_tool`, and dispatches interactive takeover polls to staff."
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000003",
-      "name": "Agent Sticky",
+      "id": "c8080008-8888-4888-8888-000000000003",
+      "name": "Flow 2 & 3 Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1180,
-        40
+        -80,
+        760
       ],
       "parameters": {
-        "width": 1240,
-        "height": 580,
+        "width": 2200,
+        "height": 560,
         "color": 7,
-        "content": "## 2. Structured AI Triage, Quoted WhatsApp Reply, Google Sheets CRM & Team Escalation\n\nGenerates a conversational reply + structured triage JSON, replies to the customer on WhatsApp, logs leads/escalations to Google Sheets, and notifies the team WhatsApp group for urgent handoffs."
+        "content": "## Flows 2 & 3: Support Team WhatsApp Poll State Machine (`Claim` / `Resolve`) & Daily Open-SLA Digest\n\nLets support agents pause or re-enable the AI per customer directly from a WhatsApp group poll and sends a daily digest of aging open escalations."
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000010",
+      "id": "c8080008-8888-4888-8888-000000000010",
       "name": "When Customer Message Arrives",
       "type": "n8n-nodes-supergreen.supergreenTrigger",
       "typeVersion": 1,
@@ -57,7 +57,7 @@
         0,
         260
       ],
-      "webhookId": "f5050005-5555-4555-8555-100000000010",
+      "webhookId": "c8080008-8888-4888-8888-100000000010",
       "credentials": {
         "supergreenApi": {
           "id": "supergreen-cred",
@@ -73,12 +73,30 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000011",
-      "name": "Configure Support Settings",
+      "id": "c8080008-8888-4888-8888-000000000011",
+      "name": "Deduplicate Message Webhooks",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        220,
+        260
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.messageId }}",
+        "options": {
+          "scope": "node",
+          "historySize": 10000
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000012",
+      "name": "Support Configuration",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        220,
+        440,
         260
       ],
       "parameters": {
@@ -94,20 +112,14 @@
             },
             {
               "id": "s2",
-              "name": "knowledgeBase",
-              "value": "Support hours: Mon-Fri 9am-6pm UTC. Free shipping on orders over $75. 30-day returns on unused items. Wholesale inquiries (10+ units) qualify for 20% off.",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
               "type": "string"
             },
             {
               "id": "s3",
-              "name": "spreadsheetId",
-              "value": "YOUR_GOOGLE_SHEET_ID",
-              "type": "string"
-            },
-            {
-              "id": "s4",
-              "name": "escalationGroupChatId",
-              "value": "YOUR_TEAM_GROUP_ID@g.us",
+              "name": "supportGroupJid",
+              "value": "SET_SUPPORT_WHATSAPP_GROUP_JID",
               "type": "string"
             }
           ]
@@ -116,26 +128,121 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000012",
-      "name": "Detect Modality and Filter Direct Chats",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "c8080008-8888-4888-8888-000000000013",
+      "name": "Check Existing Ticket State",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
       "position": [
-        440,
+        660,
         260
       ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
       "parameters": {
-        "jsCode": "const ev = $('When Customer Message Arrives').first().json;\nconst cfg = $('Configure Support Settings').first().json;\nconst chatId = String(ev.chat?.id || '');\nif (!chatId || chatId.endsWith('@g.us')) return [];\n\nconst attachments = Array.isArray(ev.attachments) ? ev.attachments : [];\nconst firstAtt = attachments[0] || null;\nconst mime = String(firstAtt?.mimeType || '').toLowerCase();\nconst fileUri = String(firstAtt?.fileUri || '');\nconst text = String(ev.text || firstAtt?.caption || '').trim();\n\nlet modality = 'text';\nif (fileUri && mime.startsWith('audio/')) modality = 'audio';\nelse if (fileUri && mime.startsWith('image/')) modality = 'image';\n\nif (modality === 'text' && !text) return [];\n\nreturn [{\n  json: {\n    chatId,\n    cleanPhone: chatId.replace(/@.*$/, ''),\n    senderName: String(ev.author?.username || ev.chat?.title || chatId.replace(/@.*$/, '')),\n    messageId: String(ev.messageId || ''),\n    modality,\n    text,\n    fileUri,\n    mimeType: mime,\n    businessName: cfg.businessName,\n    knowledgeBase: cfg.knowledgeBase,\n    spreadsheetId: cfg.spreadsheetId,\n    escalationGroupChatId: cfg.escalationGroupChatId,\n  },\n}];"
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "phone",
+              "lookupValue": "={{ String($('When Customer Message Arrives').item.json.chat?.id || '').replace(/@.*$/, '') }}"
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000013",
+      "id": "c8080008-8888-4888-8888-000000000014",
+      "name": "Evaluate Takeover and Detect Modality",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        260
+      ],
+      "parameters": {
+        "jsCode": "const ev = $('When Customer Message Arrives').first().json;\nconst cfg = $('Support Configuration').first().json;\nconst ticketRow = $input.first()?.json || {};\nconst chatId = String(ev.chat?.id || '');\nif (!chatId || chatId.endsWith('@g.us')) return [];\n\nconst attachments = Array.isArray(ev.attachments) ? ev.attachments : [];\nconst firstAtt = attachments[0] || null;\nconst mime = String(firstAtt?.mimeType || '').toLowerCase();\nconst fileUri = String(firstAtt?.fileUri || '');\nconst text = String(ev.text || firstAtt?.caption || '').trim();\n\nlet modality = 'text';\nif (fileUri && mime.startsWith('audio/')) modality = 'audio';\nelse if (fileUri && mime.startsWith('image/')) modality = 'image';\nif (modality === 'text' && !text) return [];\n\nreturn [{\n  json: {\n    chatId,\n    cleanPhone: chatId.replace(/@.*$/, ''),\n    senderName: String(ev.author?.username || ev.chat?.title || chatId.replace(/@.*$/, '')),\n    messageId: String(ev.messageId || ''),\n    modality,\n    text,\n    fileUri,\n    humanAssigned: String(ticketRow.status || '') === 'Human Assigned',\n    businessName: cfg.businessName,\n    spreadsheetId: cfg.spreadsheetId,\n    supportGroupJid: cfg.supportGroupJid,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000015",
+      "name": "Is Human Agent Currently Assigned?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "human-active",
+              "leftValue": "={{ $json.humanAssigned }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000016",
+      "name": "Relay Customer Message to Assigned Agent Group",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        120
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.supportGroupJid }}",
+        "message": "=Follow-up from assigned customer {{ $json.senderName }} (+{{ $json.cleanPhone }}, {{ $json.modality }}): {{ $json.text || $json.fileUri }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000017",
       "name": "Show WhatsApp Typing Indicator",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        660,
-        260
+        1320,
+        320
       ],
       "credentials": {
         "supergreenApi": {
@@ -151,13 +258,13 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000014",
-      "name": "Route by Message Modality",
+      "id": "c8080008-8888-4888-8888-000000000018",
+      "name": "Route by Modality",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        880,
-        260
+        1520,
+        320
       ],
       "parameters": {
         "rules": {
@@ -171,8 +278,8 @@
                 },
                 "conditions": [
                   {
-                    "id": "mod-audio",
-                    "leftValue": "={{ $('Detect Modality and Filter Direct Chats').item.json.modality }}",
+                    "id": "m-audio",
+                    "leftValue": "={{ $('Evaluate Takeover and Detect Modality').item.json.modality }}",
                     "rightValue": "audio",
                     "operator": {
                       "type": "string",
@@ -194,8 +301,8 @@
                 },
                 "conditions": [
                   {
-                    "id": "mod-image",
-                    "leftValue": "={{ $('Detect Modality and Filter Direct Chats').item.json.modality }}",
+                    "id": "m-image",
+                    "leftValue": "={{ $('Evaluate Takeover and Detect Modality').item.json.modality }}",
                     "rightValue": "image",
                     "operator": {
                       "type": "string",
@@ -217,8 +324,8 @@
                 },
                 "conditions": [
                   {
-                    "id": "mod-text",
-                    "leftValue": "={{ $('Detect Modality and Filter Direct Chats').item.json.modality }}",
+                    "id": "m-text",
+                    "leftValue": "={{ $('Evaluate Takeover and Detect Modality').item.json.modality }}",
                     "rightValue": "text",
                     "operator": {
                       "type": "string",
@@ -237,17 +344,17 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000015",
+      "id": "c8080008-8888-4888-8888-000000000019",
       "name": "Download Voice Note Audio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        120
+        1720,
+        180
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $('Detect Modality and Filter Direct Chats').item.json.fileUri }}",
+        "url": "={{ $('Evaluate Takeover and Detect Modality').item.json.fileUri }}",
         "options": {
           "response": {
             "response": {
@@ -259,13 +366,13 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000016",
-      "name": "Transcribe Voice Note with Whisper",
+      "id": "c8080008-8888-4888-8888-000000000020",
+      "name": "Transcribe Audio with Whisper",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        1300,
-        120
+        1900,
+        180
       ],
       "credentials": {
         "openAiApi": {
@@ -281,13 +388,13 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000017",
-      "name": "Analyze Customer Image with Vision",
+      "id": "c8080008-8888-4888-8888-000000000021",
+      "name": "Analyze Product or Receipt Image",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        1200,
-        260
+        1800,
+        320
       ],
       "credentials": {
         "openAiApi": {
@@ -304,52 +411,52 @@
           "mode": "list",
           "cachedResultName": "gpt-4o-mini"
         },
-        "text": "=Describe what the customer is showing in this image (product issue, receipt, order number, or screenshot) so support can assist them. Customer caption: {{ $('Detect Modality and Filter Direct Chats').item.json.text || 'none' }}",
+        "text": "=Extract any visible order number, SKU, error message, or product damage details from this customer image. Caption: {{ $('Evaluate Takeover and Detect Modality').item.json.text || 'none' }}",
         "inputType": "url",
-        "imageUrls": "={{ $('Detect Modality and Filter Direct Chats').item.json.fileUri }}",
+        "imageUrls": "={{ $('Evaluate Takeover and Detect Modality').item.json.fileUri }}",
         "options": {}
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000018",
-      "name": "Build Unified Customer Prompt",
+      "id": "c8080008-8888-4888-8888-000000000022",
+      "name": "Assemble Unified Support Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1500,
-        260
+        2080,
+        320
       ],
       "parameters": {
-        "jsCode": "const meta = $('Detect Modality and Filter Direct Chats').first().json;\nconst current = $input.first().json;\nlet normalizedInput = meta.text;\nif (meta.modality === 'audio') {\n  normalizedInput = `[Voice note transcript]: ${current.text || ''}`;\n} else if (meta.modality === 'image') {\n  const visionText = current.content || current.text || JSON.stringify(current);\n  normalizedInput = `[Customer sent an image. Caption: \"${meta.text || 'none'}\". Visual analysis: ${visionText}]`;\n}\nreturn [{ json: { ...meta, normalizedInput } }];"
+        "jsCode": "const meta = $('Evaluate Takeover and Detect Modality').first().json;\nconst cur = $input.first().json || {};\nlet customerPrompt = meta.text;\nif (meta.modality === 'audio') {\n  customerPrompt = `[Voice note transcript]: ${cur.text || ''}`;\n} else if (meta.modality === 'image') {\n  const analysis = cur.content || cur.text || JSON.stringify(cur);\n  customerPrompt = `[Customer sent photo. Caption: \"${meta.text || 'none'}\". Vision details: ${analysis}]`;\n}\nreturn [{ json: { ...meta, customerPrompt } }];"
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000019",
-      "name": "Support and Triage AI Agent",
+      "id": "c8080008-8888-4888-8888-000000000023",
+      "name": "AI Support and Order Operations Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
       "position": [
-        1720,
-        260
+        2280,
+        320
       ],
       "hasOutputParser": true,
       "parameters": {
         "promptType": "define",
-        "text": "={{ $json.normalizedInput }}",
+        "text": "={{ 'Customer phone: ' + $json.cleanPhone + '\\nCustomer name: ' + $json.senderName + '\\nMessage (' + $json.modality + '): ' + $json.customerPrompt }}",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "=You are the WhatsApp support & sales assistant for {{ $json.businessName }}.\nKnowledge base: {{ $json.knowledgeBase }}\n\nRespond with helpful, concise WhatsApp-friendly answers (under 90 words).\nClassify every message into one category:\n- \"faq\": standard question answered from the knowledge base\n- \"sales_lead\": wholesale, bulk order, pricing quote, or partnership inquiry\n- \"human_escalation\": damaged item photo, refund dispute, angry customer, or explicit request for a human agent."
+          "systemMessage": "=You are the WhatsApp support & order operations specialist for {{ $json.businessName }}.\nRules:\n1. Always call `Search Support Policies` before answering policy, shipping, return, or warranty questions.\n2. Whenever a customer asks about an order, delivery, or item issue, call `Lookup Customer Orders` to inspect their orders.\n3. If a customer requests a return, replacement, or shipping-address update on a verified order, log it via `Log Return or Action Request`.\n4. Set `needsHumanEscalation: true` when an image shows physical damage, a refund dispute arises, no matching policy exists, or the customer asks for a person.\n5. Keep `reply` concise (under 90 words) and natural for WhatsApp."
         }
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000020",
+      "id": "c8080008-8888-4888-8888-000000000024",
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        1660,
-        460
+        2100,
+        540
       ],
       "credentials": {
         "openAiApi": {
@@ -370,41 +477,153 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000021",
-      "name": "Per-Customer Chat Memory",
+      "id": "c8080008-8888-4888-8888-000000000025",
+      "name": "Customer Window Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        1800,
-        460
+        2220,
+        540
       ],
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('Build Unified Customer Prompt').item.json.chatId }}",
+        "sessionKey": "={{ $('Assemble Unified Support Prompt').item.json.chatId }}",
         "contextWindowLength": 10
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000022",
+      "id": "c8080008-8888-4888-8888-000000000026",
+      "name": "Lookup Customer Orders",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        2340,
+        540
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Look up orders placed by this customer phone number in the Orders sheet to check status, items, carrier, and tracking URL.",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Assemble Unified Support Prompt').item.json.spreadsheetId }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Orders"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "phone",
+              "lookupValue": "={{ $('Assemble Unified Support Prompt').item.json.cleanPhone }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000027",
+      "name": "Search Support Policies",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        2460,
+        540
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Read verified shipping, return, warranty, and product FAQ policies from the KnowledgeBase sheet before answering policy questions.",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Assemble Unified Support Prompt').item.json.spreadsheetId }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "KnowledgeBase"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000028",
+      "name": "Log Return or Action Request",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        2580,
+        540
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Append a structured return, replacement, or address-change request into the OrderActions sheet when requested by the customer.",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Assemble Unified Support Prompt').item.json.spreadsheetId }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "OrderActions"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "createdAt": "={{ $now.toISO() }}",
+            "phone": "={{ $('Assemble Unified Support Prompt').item.json.cleanPhone }}",
+            "orderId": "={{ $fromAI('orderId', 'Order ID referenced by the customer', 'string') }}",
+            "actionType": "={{ $fromAI('actionType', 'return, replacement, or address_change', 'string') }}",
+            "reason": "={{ $fromAI('reason', 'Short summary of customer issue or new address', 'string') }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000029",
       "name": "Structured Triage Output Parser",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.2,
       "position": [
-        1940,
-        460
+        2700,
+        540
       ],
       "parameters": {
-        "jsonSchemaExample": "{\"reply\":\"Thanks for sending that over! Here is how we can help...\",\"category\":\"sales_lead\",\"priority\":\"medium\",\"summary\":\"Customer asked for wholesale pricing on 25 units.\"}"
+        "jsonSchemaExample": "{\"reply\":\"Order #1042 shipped via DHL and arrives Thursday. Here is your tracking link...\",\"intent\":\"order_status\",\"priority\":\"medium\",\"needsHumanEscalation\":false,\"summary\":\"Checked order #1042 shipping status via Orders sheet.\"}"
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000023",
+      "id": "c8080008-8888-4888-8888-000000000030",
       "name": "Send Quoted Reply on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        2020,
-        260
+        2560,
+        240
       ],
       "credentials": {
         "supergreenApi": {
@@ -415,21 +634,21 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $('Build Unified Customer Prompt').item.json.chatId }}",
+        "toNumber": "={{ $('Assemble Unified Support Prompt').item.json.chatId }}",
         "message": "={{ $json.output.reply }}",
         "additionalFields": {
-          "quotedMessageId": "={{ $('Build Unified Customer Prompt').item.json.messageId }}"
+          "quotedMessageId": "={{ $('Assemble Unified Support Prompt').item.json.messageId }}"
         }
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000024",
-      "name": "Is Lead or Escalation?",
+      "id": "c8080008-8888-4888-8888-000000000031",
+      "name": "Requires Human Escalation?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2240,
-        260
+        2760,
+        240
       ],
       "parameters": {
         "conditions": {
@@ -440,8 +659,8 @@
           },
           "conditions": [
             {
-              "id": "is-actionable",
-              "leftValue": "={{ ['sales_lead', 'human_escalation'].includes($('Support and Triage AI Agent').item.json.output.category) }}",
+              "id": "esc-check",
+              "leftValue": "={{ Boolean($('AI Support and Order Operations Agent').item.json.output.needsHumanEscalation) }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -456,88 +675,12 @@
       }
     },
     {
-      "id": "f5050005-5555-4555-8555-000000000025",
-      "name": "Log Lead or Ticket to Google Sheets",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        2460,
-        200
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "gsheets-cred",
-          "name": "Google Sheets OAuth2"
-        }
-      },
-      "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $('Build Unified Customer Prompt').item.json.spreadsheetId }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Inquiries",
-          "mode": "name"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "timestamp": "={{ $now.toISO() }}",
-            "phone": "={{ $('Build Unified Customer Prompt').item.json.cleanPhone }}",
-            "senderName": "={{ $('Build Unified Customer Prompt').item.json.senderName }}",
-            "modality": "={{ $('Build Unified Customer Prompt').item.json.modality }}",
-            "category": "={{ $('Support and Triage AI Agent').item.json.output.category }}",
-            "priority": "={{ $('Support and Triage AI Agent').item.json.output.priority }}",
-            "summary": "={{ $('Support and Triage AI Agent').item.json.output.summary }}",
-            "customerInput": "={{ $('Build Unified Customer Prompt').item.json.normalizedInput }}"
-          }
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "f5050005-5555-4555-8555-000000000026",
-      "name": "Requires Immediate Team Alert?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        2680,
-        200
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "is-esc",
-              "leftValue": "={{ $('Support and Triage AI Agent').item.json.output.category === 'human_escalation' && $('Build Unified Customer Prompt').item.json.escalationGroupChatId !== 'YOUR_TEAM_GROUP_ID@g.us' }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "f5050005-5555-4555-8555-000000000027",
-      "name": "Alert Support Group on WhatsApp",
+      "id": "c8080008-8888-4888-8888-000000000032",
+      "name": "Send Takeover Poll to Support Group",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        2900,
+        2980,
         140
       ],
       "credentials": {
@@ -547,10 +690,415 @@
         }
       },
       "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $('Assemble Unified Support Prompt').item.json.supportGroupJid }}",
+        "name": "={{ 'Escalation (' + $('AI Support and Order Operations Agent').item.json.output.priority + ') - ' + $('Assemble Unified Support Prompt').item.json.senderName + ' (+' + $('Assemble Unified Support Prompt').item.json.cleanPhone + '): ' + $('AI Support and Order Operations Agent').item.json.output.summary }}",
+        "options": "Claim ticket - pause AI, Mark resolved - resume AI, Flag urgent refund"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000033",
+      "name": "Upsert Escalated Ticket in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3200,
+        140
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Assemble Unified Support Prompt').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Assemble Unified Support Prompt').item.json.cleanPhone }}",
+            "senderName": "={{ $('Assemble Unified Support Prompt').item.json.senderName }}",
+            "status": "Escalated",
+            "priority": "={{ $('AI Support and Order Operations Agent').item.json.output.priority }}",
+            "intent": "={{ $('AI Support and Order Operations Agent').item.json.output.intent }}",
+            "summary": "={{ $('AI Support and Order Operations Agent').item.json.output.summary }}",
+            "escalationPollId": "={{ $json.messageId || $json.id || '' }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "phone"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000034",
+      "name": "Upsert AI-Handled Ticket in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2980,
+        340
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Assemble Unified Support Prompt').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Assemble Unified Support Prompt').item.json.cleanPhone }}",
+            "senderName": "={{ $('Assemble Unified Support Prompt').item.json.senderName }}",
+            "status": "AI Answered",
+            "priority": "={{ $('AI Support and Order Operations Agent').item.json.output.priority }}",
+            "intent": "={{ $('AI Support and Order Operations Agent').item.json.output.intent }}",
+            "summary": "={{ $('AI Support and Order Operations Agent').item.json.output.summary }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "phone"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000040",
+      "name": "When Support Agent Votes on Escalation Poll",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        920
+      ],
+      "webhookId": "c8080008-8888-4888-8888-400000000040",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "vote"
+        ],
+        "onlyIncoming": false
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000041",
+      "name": "Poll State Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        920
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000042",
+      "name": "Lookup Ticket by Escalation Poll ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        920
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "escalationPollId",
+              "lookupValue": "={{ $('When Support Agent Votes on Escalation Poll').item.json.messageId }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000043",
+      "name": "Map Agent Poll Vote to Ticket Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        920
+      ],
+      "parameters": {
+        "jsCode": "const ticket = $input.first()?.json;\nif (!ticket || !ticket.phone) return [];\nconst ev = $('When Support Agent Votes on Escalation Poll').first().json;\nconst cfg = $('Poll State Configuration').first().json;\nconst idx = Array.isArray(ev.vote?.selectedOptionIndices) ? Number(ev.vote.selectedOptionIndices[0]) : -1;\nif (idx < 0 || idx > 2) return [];\nconst statuses = ['Human Assigned', 'Resolved', 'Refund Review'];\nreturn [{\n  json: {\n    phone: String(ticket.phone),\n    senderName: String(ticket.senderName || 'there'),\n    newStatus: statuses[idx],\n    notifyCustomerResolved: idx === 1,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000044",
+      "name": "Update Ticket Status in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        920
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $json.phone }}",
+            "status": "={{ $json.newStatus }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "phone"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000045",
+      "name": "Was Ticket Marked Resolved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        920
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "res-cond",
+              "leftValue": "={{ $('Map Agent Poll Vote to Ticket Status').item.json.notifyCustomerResolved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000046",
+      "name": "Send Resolution Confirmation to Customer",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        880
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $('Build Unified Customer Prompt').item.json.escalationGroupChatId }}",
-        "message": "=Urgent WhatsApp escalation ({{ $('Support and Triage AI Agent').item.json.output.priority }})\nCustomer: {{ $('Build Unified Customer Prompt').item.json.senderName }} (+{{ $('Build Unified Customer Prompt').item.json.cleanPhone }})\nSummary: {{ $('Support and Triage AI Agent').item.json.output.summary }}",
+        "toNumber": "={{ $('Map Agent Poll Vote to Ticket Status').item.json.phone }}",
+        "message": "=Hi {{ $('Map Agent Poll Vote to Ticket Status').item.json.senderName }}, our support team marked your request resolved. Reply here anytime if you need anything else!",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000050",
+      "name": "Daily 9am Open-SLA Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1140
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000051",
+      "name": "SLA Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        1140
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sla1",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "sla2",
+              "name": "supportGroupJid",
+              "value": "SET_SUPPORT_WHATSAPP_GROUP_JID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000052",
+      "name": "Read All Tickets for SLA Audit",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        1140
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000053",
+      "name": "Build Aging Escalations Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "const cutoff = Date.now() - 4 * 3600 * 1000;\nconst cfg = $('SLA Configuration').first().json;\nconst aging = $input.all()\n  .map(i => i.json)\n  .filter(r => ['Escalated', 'Human Assigned', 'Refund Review'].includes(String(r.status || '')))\n  .filter(r => !r.updatedAt || Date.parse(String(r.updatedAt)) <= cutoff);\nif (!aging.length) return [];\nconst lines = aging.slice(0, 10).map(r => `- ${r.senderName || r.phone} (+${r.phone}) [${r.status}]: ${r.summary || ''}`);\nreturn [{\n  json: {\n    supportGroupJid: cfg.supportGroupJid,\n    digestText: `Open WhatsApp escalations >4h (${aging.length}):\\n` + lines.join('\\n'),\n  },\n}];"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000054",
+      "name": "Send Daily SLA Digest to Support Group",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        880,
+        1140
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.supportGroupJid }}",
+        "message": "={{ $json.digestText }}",
         "additionalFields": {}
       }
     }
@@ -560,26 +1108,66 @@
       "main": [
         [
           {
-            "node": "Configure Support Settings",
+            "node": "Deduplicate Message Webhooks",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Configure Support Settings": {
+    "Deduplicate Message Webhooks": {
       "main": [
         [
           {
-            "node": "Detect Modality and Filter Direct Chats",
+            "node": "Support Configuration",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Detect Modality and Filter Direct Chats": {
+    "Support Configuration": {
       "main": [
+        [
+          {
+            "node": "Check Existing Ticket State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Ticket State": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Takeover and Detect Modality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Takeover and Detect Modality": {
+      "main": [
+        [
+          {
+            "node": "Is Human Agent Currently Assigned?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Human Agent Currently Assigned?": {
+      "main": [
+        [
+          {
+            "node": "Relay Customer Message to Assigned Agent Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Show WhatsApp Typing Indicator",
@@ -593,14 +1181,14 @@
       "main": [
         [
           {
-            "node": "Route by Message Modality",
+            "node": "Route by Modality",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Route by Message Modality": {
+    "Route by Modality": {
       "main": [
         [
           {
@@ -611,14 +1199,14 @@
         ],
         [
           {
-            "node": "Analyze Customer Image with Vision",
+            "node": "Analyze Product or Receipt Image",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Build Unified Customer Prompt",
+            "node": "Assemble Unified Support Prompt",
             "type": "main",
             "index": 0
           }
@@ -629,40 +1217,40 @@
       "main": [
         [
           {
-            "node": "Transcribe Voice Note with Whisper",
+            "node": "Transcribe Audio with Whisper",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Transcribe Voice Note with Whisper": {
+    "Transcribe Audio with Whisper": {
       "main": [
         [
           {
-            "node": "Build Unified Customer Prompt",
+            "node": "Assemble Unified Support Prompt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Analyze Customer Image with Vision": {
+    "Analyze Product or Receipt Image": {
       "main": [
         [
           {
-            "node": "Build Unified Customer Prompt",
+            "node": "Assemble Unified Support Prompt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Unified Customer Prompt": {
+    "Assemble Unified Support Prompt": {
       "main": [
         [
           {
-            "node": "Support and Triage AI Agent",
+            "node": "AI Support and Order Operations Agent",
             "type": "main",
             "index": 0
           }
@@ -673,19 +1261,52 @@
       "ai_languageModel": [
         [
           {
-            "node": "Support and Triage AI Agent",
+            "node": "AI Support and Order Operations Agent",
             "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "Per-Customer Chat Memory": {
+    "Customer Window Memory": {
       "ai_memory": [
         [
           {
-            "node": "Support and Triage AI Agent",
+            "node": "AI Support and Order Operations Agent",
             "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Customer Orders": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Support and Order Operations Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Support Policies": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Support and Order Operations Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Return or Action Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Support and Order Operations Agent",
+            "type": "ai_tool",
             "index": 0
           }
         ]
@@ -695,14 +1316,14 @@
       "ai_outputParser": [
         [
           {
-            "node": "Support and Triage AI Agent",
+            "node": "AI Support and Order Operations Agent",
             "type": "ai_outputParser",
             "index": 0
           }
         ]
       ]
     },
-    "Support and Triage AI Agent": {
+    "AI Support and Order Operations Agent": {
       "main": [
         [
           {
@@ -717,40 +1338,146 @@
       "main": [
         [
           {
-            "node": "Is Lead or Escalation?",
+            "node": "Requires Human Escalation?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is Lead or Escalation?": {
+    "Requires Human Escalation?": {
       "main": [
         [
           {
-            "node": "Log Lead or Ticket to Google Sheets",
+            "node": "Send Takeover Poll to Support Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert AI-Handled Ticket in Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Lead or Ticket to Google Sheets": {
+    "Send Takeover Poll to Support Group": {
       "main": [
         [
           {
-            "node": "Requires Immediate Team Alert?",
+            "node": "Upsert Escalated Ticket in Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Requires Immediate Team Alert?": {
+    "When Support Agent Votes on Escalation Poll": {
       "main": [
         [
           {
-            "node": "Alert Support Group on WhatsApp",
+            "node": "Poll State Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll State Configuration": {
+      "main": [
+        [
+          {
+            "node": "Lookup Ticket by Escalation Poll ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Ticket by Escalation Poll ID": {
+      "main": [
+        [
+          {
+            "node": "Map Agent Poll Vote to Ticket Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Agent Poll Vote to Ticket Status": {
+      "main": [
+        [
+          {
+            "node": "Update Ticket Status in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Ticket Status in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Was Ticket Marked Resolved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Ticket Marked Resolved?": {
+      "main": [
+        [
+          {
+            "node": "Send Resolution Confirmation to Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 9am Open-SLA Check": {
+      "main": [
+        [
+          {
+            "node": "SLA Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLA Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read All Tickets for SLA Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read All Tickets for SLA Audit": {
+      "main": [
+        [
+          {
+            "node": "Build Aging Escalations Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Aging Escalations Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Daily SLA Digest to Support Group",
             "type": "main",
             "index": 0
           }

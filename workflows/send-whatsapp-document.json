@@ -1,63 +1,79 @@
 {
-  "name": "Send Stripe PDF Invoices and Recover Failed Payments on WhatsApp with Google Sheets and Supergreen",
+  "name": "Send Stripe PDF Invoices and Recover Failed Payments on WhatsApp with Google Sheets, Slack, and Supergreen",
   "nodes": [
     {
-      "id": "a6060006-6666-4666-8666-000000000001",
+      "id": "b7070007-7777-4777-8777-000000000001",
       "name": "Workflow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -600,
+        -680,
         40
       ],
       "parameters": {
-        "width": 520,
-        "height": 920,
-        "content": "## Stripe PDF Invoice Delivery & Failed-Payment Dunning on WhatsApp\n\n### Who this is for\nSubscription businesses, agencies, and SaaS founders using Stripe who lose revenue to unread dunning emails and want automatic WhatsApp PDF receipts on paid invoices plus interactive WhatsApp recovery polls when cards fail.\n\n### How it works\n1. **Flow A — Stripe Invoice Paid / Failed Router:**\n   - **Stripe Trigger** listens for `invoice.payment_succeeded` and `invoice.payment_failed`.\n   - Extracts the customer's WhatsApp phone from Stripe (`customer_phone` or `metadata.whatsapp`), invoice number, amount, `invoice_pdf`, and `hosted_invoice_url`.\n   - **Paid Invoices:** Downloads the official Stripe PDF into binary `data`, sends the named PDF receipt over WhatsApp via **Supergreen**, and logs `Paid` in your **Google Sheets** billing ledger.\n   - **Failed Invoices:** Logs `Past Due` in Google Sheets, sends the customer their Stripe `hosted_invoice_url` payment link on WhatsApp, and follows up with an interactive WhatsApp Poll (`Updated payment method`, `Retry in 3 days`, `Need billing help`).\n2. **Flow B — Dunning Poll Vote Handler:**\n   - **Supergreen Trigger** (`events: ['vote']`) captures the customer's poll response in real time, updates their recovery status in **Google Sheets**, confirms receipt on WhatsApp, and alerts your finance WhatsApp group whenever a customer selects `Need billing help`.\n\n### Community Node & Compatibility\n- **Community node:** `n8n-nodes-supergreen` (tested `v0.1.5` on n8n `v1.76+`) — **verified community node** available directly on **n8n Cloud** and self-hosted n8n (`https://www.npmjs.com/package/n8n-nodes-supergreen`).\n\n### Setup steps\n1. Connect **Stripe API**, **Supergreen API** (`https://supergreen.cc`), and **Google Sheets OAuth2** credentials.\n2. Create a Google Sheet tab named `Invoices` with columns: `invoiceId`, `invoiceNumber`, `phone`, `customerName`, `amount`, `status`, `recoveryNote`, `updatedAt`.\n3. Ensure your Stripe customers store a phone number (`phone` field or `metadata.whatsapp`).\n4. Update **Configure Billing Settings** and **Configure Recovery Settings** (`companyName`, `spreadsheetId`, `financeGroupChatId`)."
+        "width": 560,
+        "height": 1180,
+        "content": "## Closed-Loop Stripe PDF Receipts & Failed-Payment Dunning Engine on WhatsApp\n\n### Who this is for\nSaaS teams, subscription businesses, and agencies on Stripe losing MRR to unread dunning emails who want instant WhatsApp PDF receipts on paid renewals plus interactive, self-serve payment recovery polls when cards fail.\n\n### Architecture (4 Coordinated Flows)\n1. **Flow 1 - Real-Time Stripe Invoice Router (Paid PDF vs. Failed Dunning):**\n   - **Stripe Trigger** listens for `invoice.payment_succeeded` and `invoice.payment_failed`, deduplicates retries via **Remove Duplicates**, and fetches the full **Stripe Customer** record so phone numbers stored on either the customer or `metadata.whatsapp_phone` are resolved reliably.\n   - **Paid path:** Downloads the official Stripe `invoice_pdf` binary, delivers the named PDF receipt over WhatsApp via **Supergreen**, and upserts `Paid` in the **Google Sheets** `Invoices` ledger.\n   - **Failed path:** Creates a live **Stripe Billing Portal Session** (`POST /v1/billing_portal/sessions`) for 1-click card updates, sends the portal link on WhatsApp, follows up with a 3-option **WhatsApp Poll** (`Card updated - retry now`, `Remind me in 3 days`, `Talk to billing support`), and records `pollMessageId` + `Past Due` in Google Sheets.\n2. **Flow 2 - Interactive Poll Vote & Live Stripe Charge Retry:**\n   - **Supergreen Trigger** (`vote`) matches the customer's tap back to the exact invoice row via `pollMessageId`.\n   - **Option 0 (`Card updated - retry now`):** Calls Stripe `POST /v1/invoices/{id}/pay` immediately (`continueRegularOutput` on card decline). Marks `Recovered` and confirms on WhatsApp if paid, or sends the exact decline notice + portal URL if the card still fails.\n   - **Option 1 (`Remind me in 3 days`):** Sets `status = Snoozed` and `nextRetryAt = +72h` in Google Sheets and confirms the grace period on WhatsApp.\n   - **Option 2 (`Talk to billing support`):** Marks `Escalated`, posts customer + Stripe invoice details to **Slack**, and confirms human follow-up on WhatsApp.\n3. **Flow 3 - Daily Snooze Expiry & Retry Scheduler:**\n   - Runs daily at 09:00, finds expired `Snoozed` / `Past Due` invoices (`retryCount < 2`), sends a fresh recovery poll on WhatsApp, and updates `pollMessageId` + `retryCount`.\n4. **Flow 4 - Billing Failure Alerting:**\n   - **Error Trigger** posts failed node diagnostics to Slack so billing automations never fail silently.\n\n### Setup\n1. Install **n8n-nodes-supergreen** (`v0.1.5+`, verified on n8n Cloud & self-hosted) and connect **Stripe API**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n2. Create a Google Sheet tab named `Invoices` with columns: `invoiceId`, `invoiceNumber`, `customerId`, `phone`, `customerName`, `amount`, `status`, `pollMessageId`, `portalUrl`, `retryCount`, `nextRetryAt`, `updatedAt`.\n3. Fill in **Workflow Configuration** (`companyName`, `spreadsheetId`, `portalReturnUrl`, `slackBillingChannelId`)."
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000002",
-      "name": "Stripe Flow Note",
+      "id": "b7070007-7777-4777-8777-000000000002",
+      "name": "Flow 1 Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -40,
+        -80,
         40
       ],
       "parameters": {
-        "width": 1700,
-        "height": 460,
+        "width": 2220,
+        "height": 500,
         "color": 7,
-        "content": "## Flow A: Stripe Invoice Paid (PDF Receipt) vs. Failed (Dunning Link + Poll)\n\nRoutes paid invoices to binary PDF download + WhatsApp document delivery, and routes failed renewals to instant WhatsApp recovery links + interactive status polls while logging both to Google Sheets."
+        "content": "## Flow 1: Stripe Webhook Deduplication, Customer Lookup, PDF Receipt Delivery & Self-Serve Billing Portal Dunning\n\nResolves customer E.164 WhatsApp numbers from Stripe, delivers official PDF receipts on paid renewals, and launches a Stripe Billing Portal session + interactive WhatsApp Poll on failed renewals."
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000003",
-      "name": "Dunning Vote Note",
+      "id": "b7070007-7777-4777-8777-000000000003",
+      "name": "Flow 2 Sticky",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -40,
-        540
+        -80,
+        580
       ],
       "parameters": {
-        "width": 1700,
+        "width": 2220,
+        "height": 560,
+        "color": 7,
+        "content": "## Flow 2: Real-Time WhatsApp Poll Vote Handler & Live Stripe Charge Retry (`POST /v1/invoices/{id}/pay`)\n\nMatches poll votes by `pollMessageId`, immediately attempts to collect payment in Stripe when a customer updates their card, schedules 72-hour grace snoozes, or escalates to Finance in Slack."
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000004",
+      "name": "Flow 3 & 4 Sticky",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        1180
+      ],
+      "parameters": {
+        "width": 2220,
         "height": 420,
         "color": 7,
-        "content": "## Flow B: Real-Time Dunning Poll Response & Finance Escalation\n\nUpdates the Google Sheets `Invoices` ledger when a past-due customer votes on the recovery poll and alerts the finance team's WhatsApp group if they need human billing assistance."
+        "content": "## Flows 3 & 4: Daily Expired-Snooze Follow-Up Scheduler & Error Alerting\n\nRe-prompts overdue snoozed invoices up to 2 times with fresh WhatsApp polls and alerts Slack immediately if any billing workflow node errors."
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000010",
+      "id": "b7070007-7777-4777-8777-000000000010",
       "name": "On Stripe Invoice Event",
       "type": "n8n-nodes-base.stripeTrigger",
       "typeVersion": 1,
       "position": [
         0,
-        240
+        260
       ],
-      "webhookId": "a6060006-6666-4666-8666-100000000010",
+      "webhookId": "b7070007-7777-4777-8777-100000000010",
       "credentials": {
         "stripeApi": {
           "id": "stripe-cred",
@@ -72,13 +88,31 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000011",
-      "name": "Configure Billing Settings",
+      "id": "b7070007-7777-4777-8777-000000000011",
+      "name": "Deduplicate Stripe Events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        220,
+        260
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.id }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000012",
+      "name": "Workflow Configuration",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        220,
-        240
+        440,
+        260
       ],
       "parameters": {
         "mode": "manual",
@@ -86,15 +120,27 @@
         "assignments": {
           "assignments": [
             {
-              "id": "c1",
+              "id": "cfg1",
               "name": "companyName",
               "value": "CloudPulse SaaS",
               "type": "string"
             },
             {
-              "id": "c2",
+              "id": "cfg2",
               "name": "spreadsheetId",
-              "value": "YOUR_GOOGLE_SHEET_ID",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "cfg3",
+              "name": "portalReturnUrl",
+              "value": "https://example.com/billing",
+              "type": "string"
+            },
+            {
+              "id": "cfg4",
+              "name": "slackBillingChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
               "type": "string"
             }
           ]
@@ -103,26 +149,47 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000012",
-      "name": "Extract Invoice and Customer Phone",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "b7070007-7777-4777-8777-000000000013",
+      "name": "Fetch Stripe Customer Profile",
+      "type": "n8n-nodes-base.stripe",
+      "typeVersion": 1,
       "position": [
-        440,
-        240
+        660,
+        260
       ],
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
       "parameters": {
-        "jsCode": "const ev = $('On Stripe Invoice Event').first().json;\nconst cfg = $('Configure Billing Settings').first().json;\nconst inv = ev.data?.object || {};\nconst rawPhone = String(inv.customer_phone || inv.metadata?.whatsapp || '').trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nconst cents = Number(inv.amount_paid || inv.amount_due || 0);\nconst currency = String(inv.currency || 'usd').toUpperCase();\nconst amountFormatted = `${(cents / 100).toFixed(2)} ${currency}`;\nconst invoiceNumber = String(inv.number || inv.id || 'Invoice').replace(/[^a-zA-Z0-9._-]/g, '-');\n\nreturn [{\n  json: {\n    eventType: String(ev.type || ''),\n    invoiceId: String(inv.id || invoiceNumber),\n    invoiceNumber,\n    cleanPhone,\n    customerName: String(inv.customer_name || 'there').trim(),\n    amountFormatted,\n    invoicePdfUrl: String(inv.invoice_pdf || ''),\n    hostedInvoiceUrl: String(inv.hosted_invoice_url || ''),\n    companyName: cfg.companyName,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+        "resource": "customer",
+        "operation": "get",
+        "customerId": "={{ $('On Stripe Invoice Event').item.json.data.object.customer }}"
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000013",
-      "name": "Did Invoice Payment Succeed?",
+      "id": "b7070007-7777-4777-8777-000000000014",
+      "name": "Normalize Invoice and Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        260
+      ],
+      "parameters": {
+        "jsCode": "const ev = $('On Stripe Invoice Event').first().json;\nconst cfg = $('Workflow Configuration').first().json;\nconst customer = $input.first().json || {};\nconst inv = ev.data?.object || {};\n\nconst rawPhone = String(\n  inv.customer_phone || customer.phone || customer.metadata?.whatsapp_phone || inv.metadata?.whatsapp_phone || ''\n).trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nconst cents = Number(inv.amount_paid || inv.amount_due || 0);\nconst currency = String(inv.currency || 'usd').toUpperCase();\nconst amountFormatted = `${(cents / 100).toFixed(2)} ${currency}`;\nconst invoiceNumber = String(inv.number || inv.id || 'Invoice').replace(/[^a-zA-Z0-9._-]/g, '-');\n\nreturn [{\n  json: {\n    eventType: String(ev.type || ''),\n    invoiceId: String(inv.id || ''),\n    invoiceNumber,\n    customerId: String(inv.customer || customer.id || ''),\n    cleanPhone,\n    customerName: String(customer.name || inv.customer_name || 'there').trim(),\n    amountFormatted,\n    invoicePdfUrl: String(inv.invoice_pdf || ''),\n    hostedInvoiceUrl: String(inv.hosted_invoice_url || ''),\n    companyName: cfg.companyName,\n    spreadsheetId: cfg.spreadsheetId,\n    portalReturnUrl: cfg.portalReturnUrl,\n    slackBillingChannelId: cfg.slackBillingChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000015",
+      "name": "Did Payment Succeed?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        660,
-        240
+        1100,
+        260
       ],
       "parameters": {
         "conditions": {
@@ -133,7 +200,7 @@
           },
           "conditions": [
             {
-              "id": "paid-cond",
+              "id": "paid-branch",
               "leftValue": "={{ $json.eventType === 'invoice.payment_succeeded' && $json.invoicePdfUrl.startsWith('https://') }}",
               "rightValue": true,
               "operator": {
@@ -149,12 +216,12 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000014",
+      "id": "b7070007-7777-4777-8777-000000000016",
       "name": "Download Stripe Invoice PDF",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        900,
+        1340,
         140
       ],
       "parameters": {
@@ -171,12 +238,12 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000015",
+      "id": "b7070007-7777-4777-8777-000000000017",
       "name": "Send PDF Receipt on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1140,
+        1580,
         140
       ],
       "credentials": {
@@ -188,24 +255,24 @@
       "parameters": {
         "resource": "media",
         "operation": "sendMedia",
-        "toNumber": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
+        "toNumber": "={{ $('Normalize Invoice and Phone').item.json.cleanPhone }}",
         "type": "document",
         "mediaSource": "binary",
         "binaryPropertyName": "data",
         "additionalFields": {
-          "filename": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber + '.pdf' }}",
-          "caption": "=Hi {{ $('Extract Invoice and Customer Phone').item.json.customerName }}, thank you for your payment of {{ $('Extract Invoice and Customer Phone').item.json.amountFormatted }} to {{ $('Extract Invoice and Customer Phone').item.json.companyName }}! Attached is receipt {{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber }}.",
+          "filename": "={{ $('Normalize Invoice and Phone').item.json.invoiceNumber + '.pdf' }}",
+          "caption": "=Hi {{ $('Normalize Invoice and Phone').item.json.customerName }}, thank you for your payment of {{ $('Normalize Invoice and Phone').item.json.amountFormatted }} to {{ $('Normalize Invoice and Phone').item.json.companyName }}. Your official receipt ({{ $('Normalize Invoice and Phone').item.json.invoiceNumber }}) is attached.",
           "mimeType": "application/pdf"
         }
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000016",
-      "name": "Log Paid Invoice in Sheet",
+      "id": "b7070007-7777-4777-8777-000000000018",
+      "name": "Upsert Paid Invoice in Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1380,
+        1820,
         140
       ],
       "credentials": {
@@ -218,7 +285,7 @@
         "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
-          "value": "={{ $('Extract Invoice and Customer Phone').item.json.spreadsheetId }}",
+          "value": "={{ $('Normalize Invoice and Phone').item.json.spreadsheetId }}",
           "mode": "id"
         },
         "sheetName": {
@@ -229,11 +296,12 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "invoiceId": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceId }}",
-            "invoiceNumber": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber }}",
-            "phone": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
-            "customerName": "={{ $('Extract Invoice and Customer Phone').item.json.customerName }}",
-            "amount": "={{ $('Extract Invoice and Customer Phone').item.json.amountFormatted }}",
+            "invoiceId": "={{ $('Normalize Invoice and Phone').item.json.invoiceId }}",
+            "invoiceNumber": "={{ $('Normalize Invoice and Phone').item.json.invoiceNumber }}",
+            "customerId": "={{ $('Normalize Invoice and Phone').item.json.customerId }}",
+            "phone": "={{ $('Normalize Invoice and Phone').item.json.cleanPhone }}",
+            "customerName": "={{ $('Normalize Invoice and Phone').item.json.customerName }}",
+            "amount": "={{ $('Normalize Invoice and Phone').item.json.amountFormatted }}",
             "status": "Paid",
             "updatedAt": "={{ $now.toISO() }}"
           },
@@ -245,13 +313,50 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000017",
-      "name": "Send Stripe Retry Link on WhatsApp",
+      "id": "b7070007-7777-4777-8777-000000000019",
+      "name": "Create Stripe Billing Portal Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        360
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/billing_portal/sessions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customer",
+              "value": "={{ $json.customerId }}"
+            },
+            {
+              "name": "return_url",
+              "value": "={{ $json.portalReturnUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000020",
+      "name": "Send Portal Update Link on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        900,
-        340
+        1520,
+        360
       ],
       "credentials": {
         "supergreenApi": {
@@ -262,21 +367,21 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $json.cleanPhone }}",
-        "message": "=Hi {{ $json.customerName }}, your payment of {{ $json.amountFormatted }} for {{ $json.companyName }} ({{ $json.invoiceNumber }}) didn't go through. You can update your card securely here: {{ $json.hostedInvoiceUrl }}",
+        "toNumber": "={{ $('Normalize Invoice and Phone').item.json.cleanPhone }}",
+        "message": "=Hi {{ $('Normalize Invoice and Phone').item.json.customerName }}, your renewal of {{ $('Normalize Invoice and Phone').item.json.amountFormatted }} for {{ $('Normalize Invoice and Phone').item.json.companyName }} ({{ $('Normalize Invoice and Phone').item.json.invoiceNumber }}) did not go through. Update your payment method securely here: {{ $json.url || $('Normalize Invoice and Phone').item.json.hostedInvoiceUrl }}",
         "additionalFields": {
           "linkPreview": true
         }
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000018",
-      "name": "Send Dunning Follow-Up Poll",
+      "id": "b7070007-7777-4777-8777-000000000021",
+      "name": "Send Interactive Dunning Poll",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1140,
-        340
+        1720,
+        360
       ],
       "credentials": {
         "supergreenApi": {
@@ -287,19 +392,32 @@
       "parameters": {
         "resource": "poll",
         "operation": "sendPoll",
-        "toNumber": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
-        "name": "Let us know how you'd like to handle this invoice:",
-        "options": "Updated payment method, Retry in 3 days, Need billing help"
+        "toNumber": "={{ $('Normalize Invoice and Phone').item.json.cleanPhone }}",
+        "name": "Once you check your card, choose an option below:",
+        "options": "Card updated - retry now, Remind me in 3 days, Talk to billing support"
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000019",
-      "name": "Log Past-Due Invoice in Sheet",
+      "id": "b7070007-7777-4777-8777-000000000022",
+      "name": "Prepare Past-Due Ledger Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        360
+      ],
+      "parameters": {
+        "jsCode": "const inv = $('Normalize Invoice and Phone').first().json;\nconst portal = $('Create Stripe Billing Portal Session').first().json || {};\nconst pollRes = $input.first().json || {};\nconst pollMessageId = String(pollRes.messageId || pollRes.id || '');\nconst nextRetryAt = new Date(Date.now() + 72 * 3600 * 1000).toISOString();\nreturn [{\n  json: {\n    ...inv,\n    portalUrl: String(portal.url || inv.hostedInvoiceUrl || ''),\n    pollMessageId,\n    nextRetryAt,\n  },\n}];"
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000023",
+      "name": "Upsert Past-Due Invoice in Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1380,
-        340
+        2060,
+        360
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -311,7 +429,7 @@
         "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
-          "value": "={{ $('Extract Invoice and Customer Phone').item.json.spreadsheetId }}",
+          "value": "={{ $json.spreadsheetId }}",
           "mode": "id"
         },
         "sheetName": {
@@ -322,12 +440,17 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "invoiceId": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceId }}",
-            "invoiceNumber": "={{ $('Extract Invoice and Customer Phone').item.json.invoiceNumber }}",
-            "phone": "={{ $('Extract Invoice and Customer Phone').item.json.cleanPhone }}",
-            "customerName": "={{ $('Extract Invoice and Customer Phone').item.json.customerName }}",
-            "amount": "={{ $('Extract Invoice and Customer Phone').item.json.amountFormatted }}",
+            "invoiceId": "={{ $json.invoiceId }}",
+            "invoiceNumber": "={{ $json.invoiceNumber }}",
+            "customerId": "={{ $json.customerId }}",
+            "phone": "={{ $json.cleanPhone }}",
+            "customerName": "={{ $json.customerName }}",
+            "amount": "={{ $json.amountFormatted }}",
             "status": "Past Due",
+            "pollMessageId": "={{ $json.pollMessageId }}",
+            "portalUrl": "={{ $json.portalUrl }}",
+            "retryCount": 0,
+            "nextRetryAt": "={{ $json.nextRetryAt }}",
             "updatedAt": "={{ $now.toISO() }}"
           },
           "matchingColumns": [
@@ -338,15 +461,15 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000020",
+      "id": "b7070007-7777-4777-8777-000000000030",
       "name": "When Customer Votes on Dunning Poll",
       "type": "n8n-nodes-supergreen.supergreenTrigger",
       "typeVersion": 1,
       "position": [
         0,
-        720
+        820
       ],
-      "webhookId": "a6060006-6666-4666-8666-200000000020",
+      "webhookId": "b7070007-7777-4777-8777-300000000030",
       "credentials": {
         "supergreenApi": {
           "id": "supergreen-cred",
@@ -362,13 +485,13 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000021",
-      "name": "Configure Recovery Settings",
+      "id": "b7070007-7777-4777-8777-000000000031",
+      "name": "Vote Handler Configuration",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
         220,
-        720
+        820
       ],
       "parameters": {
         "mode": "manual",
@@ -376,15 +499,15 @@
         "assignments": {
           "assignments": [
             {
-              "id": "r1",
+              "id": "v1",
               "name": "spreadsheetId",
-              "value": "YOUR_GOOGLE_SHEET_ID",
+              "value": "SET_GOOGLE_SHEET_ID",
               "type": "string"
             },
             {
-              "id": "r2",
-              "name": "financeGroupChatId",
-              "value": "YOUR_FINANCE_GROUP_ID@g.us",
+              "id": "v2",
+              "name": "slackBillingChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
               "type": "string"
             }
           ]
@@ -393,26 +516,296 @@
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000022",
-      "name": "Parse Dunning Poll Choice",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        440,
-        720
-      ],
-      "parameters": {
-        "jsCode": "const ev = $('When Customer Votes on Dunning Poll').first().json;\nconst cfg = $('Configure Recovery Settings').first().json;\nconst idx = Array.isArray(ev.vote?.selectedOptionIndices) ? Number(ev.vote.selectedOptionIndices[0]) : -1;\nconst chatId = String(ev.chat?.id || '');\nconst cleanPhone = chatId.replace(/@.*$/, '').replace(/\\D/g, '');\nif (!cleanPhone || idx < 0 || idx > 2) return [];\n\nconst labels = ['Card Updated by Customer', 'Retry Requested in 3 Days', 'Billing Help Requested'];\nconst replies = [\n  'Thank you! Stripe will automatically confirm your updated payment method and send your PDF receipt shortly.',\n  'Got it — we noted your request and no service interruption will occur in the meantime.',\n  'A member of our billing team has been notified and will reply here shortly to help.',\n];\nreturn [{\n  json: {\n    chatId,\n    cleanPhone,\n    recoveryNote: labels[idx],\n    replyText: replies[idx],\n    needsFinanceHelp: idx === 2 && cfg.financeGroupChatId !== 'YOUR_FINANCE_GROUP_ID@g.us',\n    financeGroupChatId: cfg.financeGroupChatId,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
-      }
-    },
-    {
-      "id": "a6060006-6666-4666-8666-000000000023",
-      "name": "Update Recovery Note in Sheet",
+      "id": "b7070007-7777-4777-8777-000000000032",
+      "name": "Lookup Invoice by Poll Message ID",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        680,
-        720
+        440,
+        820
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "pollMessageId",
+              "lookupValue": "={{ $('When Customer Votes on Dunning Poll').item.json.messageId }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000033",
+      "name": "Validate Poll Choice and Invoice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        820
+      ],
+      "parameters": {
+        "jsCode": "const row = $input.first()?.json;\nif (!row || !row.invoiceId || row.status === 'Paid' || row.status === 'Recovered') return [];\nconst ev = $('When Customer Votes on Dunning Poll').first().json;\nconst cfg = $('Vote Handler Configuration').first().json;\nconst idx = Array.isArray(ev.vote?.selectedOptionIndices) ? Number(ev.vote.selectedOptionIndices[0]) : -1;\nif (idx < 0 || idx > 2) return [];\nconst actions = ['retry_now', 'snooze_3d', 'support_escalation'];\nreturn [{\n  json: {\n    ...row,\n    chatId: String(ev.chat?.id || row.phone),\n    action: actions[idx],\n    snoozeUntilIso: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),\n    spreadsheetId: cfg.spreadsheetId,\n    slackBillingChannelId: cfg.slackBillingChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000034",
+      "name": "Route Dunning Poll Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        820
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "act-retry",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "retry_now",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Retry Charge Now"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "act-snooze",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "snooze_3d",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Snooze 3 Days"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "act-support",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "support_escalation",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Billing Support"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000035",
+      "name": "Retry Stripe Invoice Charge Now",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        680
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.stripe.com/v1/invoices/' + $json.invoiceId + '/pay' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000036",
+      "name": "Did Live Charge Succeed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        680
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "charge-ok",
+              "leftValue": "={{ $json.status === 'paid' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000037",
+      "name": "Mark Invoice Recovered in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1600,
+        620
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Validate Poll Choice and Invoice').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoiceId": "={{ $('Validate Poll Choice and Invoice').item.json.invoiceId }}",
+            "status": "Recovered",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "invoiceId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000038",
+      "name": "Confirm Payment Recovery on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        620
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Poll Choice and Invoice').item.json.chatId }}",
+        "message": "=Payment confirmed for invoice {{ $('Validate Poll Choice and Invoice').item.json.invoiceNumber }} ({{ $('Validate Poll Choice and Invoice').item.json.amount }}). Thank you — your PDF receipt is on the way!",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000039",
+      "name": "Notify Customer Card Still Declined",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        740
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Poll Choice and Invoice').item.json.chatId }}",
+        "message": "=We just retried invoice {{ $('Validate Poll Choice and Invoice').item.json.invoiceNumber }}, and your bank still declined the charge. Please double-check your default payment method here: {{ $('Validate Poll Choice and Invoice').item.json.portalUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000040",
+      "name": "Save 3-Day Snooze in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1140,
+        860
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -435,25 +828,26 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "phone": "={{ $json.cleanPhone }}",
-            "recoveryNote": "={{ $json.recoveryNote }}",
+            "invoiceId": "={{ $json.invoiceId }}",
+            "status": "Snoozed",
+            "nextRetryAt": "={{ $json.snoozeUntilIso }}",
             "updatedAt": "={{ $now.toISO() }}"
           },
           "matchingColumns": [
-            "phone"
+            "invoiceId"
           ]
         },
         "options": {}
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000024",
-      "name": "Confirm Poll Choice on WhatsApp",
+      "id": "b7070007-7777-4777-8777-000000000041",
+      "name": "Confirm 3-Day Grace Window on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        920,
-        720
+        1380,
+        860
       ],
       "credentials": {
         "supergreenApi": {
@@ -464,52 +858,88 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $('Parse Dunning Poll Choice').item.json.chatId }}",
-        "message": "={{ $('Parse Dunning Poll Choice').item.json.replyText }}",
+        "toNumber": "={{ $('Validate Poll Choice and Invoice').item.json.chatId }}",
+        "message": "=Got it — we paused dunning reminders for 3 days on invoice {{ $('Validate Poll Choice and Invoice').item.json.invoiceNumber }} with no interruption to your account.",
         "additionalFields": {}
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000025",
-      "name": "Did Customer Ask for Billing Help?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "id": "b7070007-7777-4777-8777-000000000042",
+      "name": "Mark Invoice Escalated in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
       "position": [
-        1160,
-        720
+        1140,
+        1000
       ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoiceId": "={{ $json.invoiceId }}",
+            "status": "Escalated",
+            "updatedAt": "={{ $now.toISO() }}"
           },
-          "conditions": [
-            {
-              "id": "fin-help",
-              "leftValue": "={{ $('Parse Dunning Poll Choice').item.json.needsFinanceHelp }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
+          "matchingColumns": [
+            "invoiceId"
+          ]
         },
         "options": {}
       }
     },
     {
-      "id": "a6060006-6666-4666-8666-000000000026",
-      "name": "Alert Finance WhatsApp Group",
+      "id": "b7070007-7777-4777-8777-000000000043",
+      "name": "Alert Finance Team in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1380,
+        1000
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate Poll Choice and Invoice').item.json.slackBillingChannelId }}"
+        },
+        "text": "={{ 'Billing help requested on WhatsApp\\nCustomer: ' + $('Validate Poll Choice and Invoice').item.json.customerName + ' (+' + $('Validate Poll Choice and Invoice').item.json.phone + ')\\nInvoice: ' + $('Validate Poll Choice and Invoice').item.json.invoiceNumber + ' (' + $('Validate Poll Choice and Invoice').item.json.amount + ')\\nStripe ID: ' + $('Validate Poll Choice and Invoice').item.json.invoiceId }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000044",
+      "name": "Confirm Billing Handoff on WhatsApp",
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1400,
-        660
+        1620,
+        1000
       ],
       "credentials": {
         "supergreenApi": {
@@ -520,9 +950,203 @@
       "parameters": {
         "resource": "message",
         "operation": "send",
-        "toNumber": "={{ $('Parse Dunning Poll Choice').item.json.financeGroupChatId }}",
-        "message": "=Billing assistance requested on WhatsApp by +{{ $('Parse Dunning Poll Choice').item.json.cleanPhone }}. Check the Invoices sheet to follow up.",
+        "toNumber": "={{ $('Validate Poll Choice and Invoice').item.json.chatId }}",
+        "message": "Our billing team has been notified with your invoice details and will reply here shortly to help.",
         "additionalFields": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000050",
+      "name": "Daily 9am Grace-Expiry Sweep",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1340
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000051",
+      "name": "Sweep Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        1340
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sw1",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000052",
+      "name": "Read Open Invoices from Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        1340
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000053",
+      "name": "Filter Expired Snoozes Under Retry Cap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        1340
+      ],
+      "parameters": {
+        "jsCode": "const now = Date.now();\nconst cfg = $('Sweep Configuration').first().json;\nreturn $input.all()\n  .map(i => i.json)\n  .filter(r => ['Past Due', 'Snoozed'].includes(String(r.status || '')))\n  .filter(r => Number(r.retryCount || 0) < 2)\n  .filter(r => r.nextRetryAt && Date.parse(String(r.nextRetryAt)) <= now)\n  .map(r => ({\n    json: {\n      ...r,\n      nextRetryCount: Number(r.retryCount || 0) + 1,\n      nextSnoozeIso: new Date(now + 72 * 3600 * 1000).toISOString(),\n      spreadsheetId: cfg.spreadsheetId,\n    },\n  }));"
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000054",
+      "name": "Send Follow-Up Dunning Poll",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        920,
+        1340
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $json.phone }}",
+        "name": "={{ 'Friendly reminder on invoice ' + $json.invoiceNumber + ' (' + $json.amount + ') - how would you like to proceed?' }}",
+        "options": "Card updated - retry now, Remind me in 3 days, Talk to billing support"
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000055",
+      "name": "Update Poll ID and Retry Count",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1160,
+        1340
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Filter Expired Snoozes Under Retry Cap').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoiceId": "={{ $('Filter Expired Snoozes Under Retry Cap').item.json.invoiceId }}",
+            "status": "Past Due",
+            "pollMessageId": "={{ $json.messageId || $json.id || '' }}",
+            "retryCount": "={{ $('Filter Expired Snoozes Under Retry Cap').item.json.nextRetryCount }}",
+            "nextRetryAt": "={{ $('Filter Expired Snoozes Under Retry Cap').item.json.nextSnoozeIso }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "invoiceId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000060",
+      "name": "On Billing Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1480,
+        1340
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b7070007-7777-4777-8777-000000000061",
+      "name": "Alert Ops in Slack on Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1720,
+        1340
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SET_SLACK_CHANNEL_ID"
+        },
+        "text": "={{ 'Stripe WhatsApp Dunning Workflow Error\\nNode: ' + ($json.execution?.lastNodeExecuted || 'trigger') + '\\nMessage: ' + ($json.execution?.error?.message || 'unknown error') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
       }
     }
   ],
@@ -531,36 +1155,58 @@
       "main": [
         [
           {
-            "node": "Configure Billing Settings",
+            "node": "Deduplicate Stripe Events",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Configure Billing Settings": {
+    "Deduplicate Stripe Events": {
       "main": [
         [
           {
-            "node": "Extract Invoice and Customer Phone",
+            "node": "Workflow Configuration",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Invoice and Customer Phone": {
+    "Workflow Configuration": {
       "main": [
         [
           {
-            "node": "Did Invoice Payment Succeed?",
+            "node": "Fetch Stripe Customer Profile",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Did Invoice Payment Succeed?": {
+    "Fetch Stripe Customer Profile": {
+      "main": [
+        [
+          {
+            "node": "Normalize Invoice and Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Invoice and Phone": {
+      "main": [
+        [
+          {
+            "node": "Did Payment Succeed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did Payment Succeed?": {
       "main": [
         [
           {
@@ -571,7 +1217,7 @@
         ],
         [
           {
-            "node": "Send Stripe Retry Link on WhatsApp",
+            "node": "Create Stripe Billing Portal Session",
             "type": "main",
             "index": 0
           }
@@ -593,29 +1239,51 @@
       "main": [
         [
           {
-            "node": "Log Paid Invoice in Sheet",
+            "node": "Upsert Paid Invoice in Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Stripe Retry Link on WhatsApp": {
+    "Create Stripe Billing Portal Session": {
       "main": [
         [
           {
-            "node": "Send Dunning Follow-Up Poll",
+            "node": "Send Portal Update Link on WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Dunning Follow-Up Poll": {
+    "Send Portal Update Link on WhatsApp": {
       "main": [
         [
           {
-            "node": "Log Past-Due Invoice in Sheet",
+            "node": "Send Interactive Dunning Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Interactive Dunning Poll": {
+      "main": [
+        [
+          {
+            "node": "Prepare Past-Due Ledger Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Past-Due Ledger Record": {
+      "main": [
+        [
+          {
+            "node": "Upsert Past-Due Invoice in Sheet",
             "type": "main",
             "index": 0
           }
@@ -626,62 +1294,204 @@
       "main": [
         [
           {
-            "node": "Configure Recovery Settings",
+            "node": "Vote Handler Configuration",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Configure Recovery Settings": {
+    "Vote Handler Configuration": {
       "main": [
         [
           {
-            "node": "Parse Dunning Poll Choice",
+            "node": "Lookup Invoice by Poll Message ID",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Dunning Poll Choice": {
+    "Lookup Invoice by Poll Message ID": {
       "main": [
         [
           {
-            "node": "Update Recovery Note in Sheet",
+            "node": "Validate Poll Choice and Invoice",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Recovery Note in Sheet": {
+    "Validate Poll Choice and Invoice": {
       "main": [
         [
           {
-            "node": "Confirm Poll Choice on WhatsApp",
+            "node": "Route Dunning Poll Action",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Confirm Poll Choice on WhatsApp": {
+    "Route Dunning Poll Action": {
       "main": [
         [
           {
-            "node": "Did Customer Ask for Billing Help?",
+            "node": "Retry Stripe Invoice Charge Now",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save 3-Day Snooze in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Invoice Escalated in Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Did Customer Ask for Billing Help?": {
+    "Retry Stripe Invoice Charge Now": {
       "main": [
         [
           {
-            "node": "Alert Finance WhatsApp Group",
+            "node": "Did Live Charge Succeed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did Live Charge Succeed?": {
+      "main": [
+        [
+          {
+            "node": "Mark Invoice Recovered in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Customer Card Still Declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Invoice Recovered in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Confirm Payment Recovery on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save 3-Day Snooze in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Confirm 3-Day Grace Window on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Invoice Escalated in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Alert Finance Team in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Finance Team in Slack": {
+      "main": [
+        [
+          {
+            "node": "Confirm Billing Handoff on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 9am Grace-Expiry Sweep": {
+      "main": [
+        [
+          {
+            "node": "Sweep Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sweep Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read Open Invoices from Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Open Invoices from Sheet": {
+      "main": [
+        [
+          {
+            "node": "Filter Expired Snoozes Under Retry Cap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Expired Snoozes Under Retry Cap": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-Up Dunning Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-Up Dunning Poll": {
+      "main": [
+        [
+          {
+            "node": "Update Poll ID and Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Billing Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops in Slack on Error",
             "type": "main",
             "index": 0
           }
