@@ -1,0 +1,1953 @@
+{
+  "name": "Manage Paid WhatsApp VIP Group Access and Anti-Leak Moderation with Stripe, Google Sheets, Slack, and Supergreen",
+  "nodes": [
+    {
+      "id": "c8080008-8888-4888-8888-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        40
+      ],
+      "parameters": {
+        "width": 580,
+        "height": 1580,
+        "content": "## Paid WhatsApp VIP Community Access Manager & Anti-Leak Moderation Engine\n\n### Who this is for\nCreators, cohort coaches, paid newsletters, trading/investing groups, and SaaS communities selling access to a private WhatsApp group via Stripe who are tired of manually adding new subscribers, chasing failed renewals, kicking churned members, and policing leaked invite links.\n\n### Why Supergreen?\nMeta's official WhatsApp Business Cloud API does not support WhatsApp group membership management (`addParticipant`, `removeParticipant`, `getMembers`, `getInviteLink`, or `participant_joined` events). This workflow uses the `n8n-nodes-supergreen` community node to automate the full paid-community lifecycle end to end.\n\n### Architecture (4 Coordinated Flows)\n1. **Flow 1 - Real-Time Stripe Subscription Provisioning, Grace Period & Churn Removal:**\n   - **Stripe Trigger** listens to `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`, deduplicates retries via **Remove Duplicates**, and fetches the full **Stripe Customer** record to normalize the member's E.164 WhatsApp phone number.\n   - **Grant Access (`active` / `trialing`):** Calls **Supergreen Group -> Add Participant** directly. Because WhatsApp users can restrict who adds them to groups, the node uses `continueRegularOutput`: if direct-add succeeds, it sends a welcome DM; if privacy blocks direct-add, it automatically fetches the private group invite link (`getInviteLink`) and DMs it as a fallback. Both paths upsert `Active` in the **Google Sheets** `Members` ledger and log the join in **Slack**.\n   - **Past-Due Grace Window (`past_due`):** Creates a live **Stripe Billing Portal Session** (`POST /v1/billing_portal/sessions`), DMs the member a 48-hour payment update warning, and records `Past Due` + `graceExpiresAt` in Google Sheets.\n   - **Revoke Access (`canceled` / `unpaid` / `deleted`):** Removes the churned member via **Supergreen Group -> Remove Participant**, sends a polite exit + rejoin DM, updates Google Sheets to `Removed`, and posts a churn alert to Slack.\n2. **Flow 2 - Real-Time Anti-Leak Gatekeeper & Automated Group Welcome:**\n   - **Supergreen Trigger** (`participant_joined`) fires whenever anyone joins your VIP WhatsApp group (including via a forwarded or leaked invite link).\n   - Verifies the joiner's phone against the **Google Sheets** `Members` ledger (ignoring configured admin phones).\n   - **Paid member:** Posts a personalized welcome message inside the VIP group and records `inGroup = Yes` + `joinedAt` in Sheets.\n   - **Unauthorized joiner:** Immediately removes them from the group (`removeParticipant`), DMs them your official signup/checkout link, and alerts admins in Slack of a potential invite-link leak.\n3. **Flow 3 - Daily Live Group Roster Reconciliation & Grace-Expiry Enforcement:**\n   - Runs every morning at 08:00 via **Schedule Trigger**.\n   - Pulls the live WhatsApp group roster (**Supergreen Group -> Get Members**), collapses it cleanly to one payload, and compares every non-admin participant against the Google Sheets ledger.\n   - Automatically evicts any member whose 48-hour `Past Due` grace period expired or who is present in the group without an active subscription, notifies them on WhatsApp, syncs the sheet, and posts a daily audit summary to Slack.\n4. **Flow 4 - Workflow Error Monitoring:**\n   - Captures any runtime failure via **Error Trigger** and alerts your Slack ops channel immediately.\n\n### Setup Checklist\n1. Install the community node `n8n-nodes-supergreen` and make sure your connected WhatsApp number is a **Group Admin** in the VIP WhatsApp group.\n2. Connect credentials for **Stripe API**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n3. Create a Google Sheet with a tab named `Members` and columns: `customerId`, `subscriptionId`, `phone`, `memberName`, `email`, `planName`, `status`, `accessMethod`, `inGroup`, `graceExpiresAt`, `joinedAt`, `updatedAt`.\n4. Fill in the placeholders (`SET_WHATSAPP_GROUP_ID`, `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, `SET_ADMIN_PHONES_CSV`, and your checkout/billing URLs) inside the 3 Configuration nodes (`Community Configuration`, `Guard Configuration`, `Audit Configuration`) and the Slack error node.\n5. Collect the subscriber's WhatsApp phone number at Stripe Checkout (`phone_number_collection[enabled]=true` or customer `metadata.whatsapp_phone`)."
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000002",
+      "name": "Flow 1 Sticky",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        40
+      ],
+      "parameters": {
+        "width": 2580,
+        "height": 760,
+        "color": 7,
+        "content": "## Flow 1: Real-Time Stripe Subscription Provisioning, Privacy-Safe Invite Fallback, Grace Warning & Churn Removal\n\nAutomatically adds paying subscribers to your VIP WhatsApp group (falling back to a private invite link DM if WhatsApp privacy settings block direct add), sends 48h Billing Portal grace warnings on `past_due`, and kicks canceled/unpaid members."
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000003",
+      "name": "Flow 2 Sticky",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        840
+      ],
+      "parameters": {
+        "width": 2440,
+        "height": 460,
+        "color": 6,
+        "content": "## Flow 2: Real-Time Anti-Leak Gatekeeper & Group Welcome (`participant_joined`)\n\nFires whenever someone joins the VIP group. Welcomes verified paying members in-group and immediately removes unauthorized leaked-link joiners while alerting admins in Slack."
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000004",
+      "name": "Flow 3 Sticky",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        1340
+      ],
+      "parameters": {
+        "width": 2440,
+        "height": 440,
+        "color": 5,
+        "content": "## Flow 3: Daily Live WhatsApp Group Roster Audit & Grace-Expiry Sweep\n\nCompares live WhatsApp group participants (`getMembers`) against the Google Sheets paid ledger every morning, evicting expired grace-period or unlisted members and posting a reconciliation report to Slack."
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000005",
+      "name": "Flow 4 Sticky",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        1820
+      ],
+      "parameters": {
+        "width": 900,
+        "height": 260,
+        "color": 3,
+        "content": "## Flow 4: Community Ops Error Alerting\n\nCatches any unhandled workflow failure and notifies your Slack ops channel with the failing node and error message."
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000010",
+      "name": "On Stripe Subscription Event",
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        380
+      ],
+      "webhookId": "c8080008-8888-4888-8888-100000000010",
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
+      "parameters": {
+        "events": [
+          "customer.subscription.created",
+          "customer.subscription.updated",
+          "customer.subscription.deleted"
+        ]
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000011",
+      "name": "Deduplicate Stripe Events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        220,
+        380
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.id }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000012",
+      "name": "Community Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        380
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "communityName",
+              "value": "Founders Circle VIP",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "vipGroupId",
+              "value": "SET_WHATSAPP_GROUP_ID",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "checkoutUrl",
+              "value": "https://example.com/join",
+              "type": "string"
+            },
+            {
+              "id": "c6",
+              "name": "portalReturnUrl",
+              "value": "https://example.com/billing",
+              "type": "string"
+            },
+            {
+              "id": "c7",
+              "name": "graceHours",
+              "value": 48,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000013",
+      "name": "Fetch Stripe Customer",
+      "type": "n8n-nodes-base.stripe",
+      "typeVersion": 1,
+      "position": [
+        660,
+        380
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
+      "parameters": {
+        "resource": "customer",
+        "operation": "get",
+        "customerId": "={{ $('On Stripe Subscription Event').item.json.data.object.customer }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000014",
+      "name": "Normalize Member and Subscription",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        380
+      ],
+      "parameters": {
+        "jsCode": "const ev = $('On Stripe Subscription Event').first().json;\nconst cfg = $('Community Configuration').first().json;\nconst customer = $input.first().json || {};\nconst sub = ev.data?.object || {};\nconst prevStatus = String(ev.data?.previous_attributes?.status || '');\nconst subStatus = String(sub.status || '');\nconst eventType = String(ev.type || '');\n\nconst rawPhone = String(\n  customer.phone || customer.metadata?.whatsapp_phone || sub.metadata?.whatsapp_phone || ''\n).trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nlet lifecycleAction = 'ignore';\nif (eventType === 'customer.subscription.deleted' || ['canceled', 'unpaid', 'incomplete_expired'].includes(subStatus)) {\n  lifecycleAction = 'revoke_access';\n} else if (subStatus === 'past_due') {\n  lifecycleAction = 'grace_warning';\n} else if (['active', 'trialing'].includes(subStatus)) {\n  if (eventType === 'customer.subscription.created' || (prevStatus && !['active', 'trialing'].includes(prevStatus))) {\n    lifecycleAction = 'grant_access';\n  }\n}\nif (lifecycleAction === 'ignore') return [];\n\nconst planName = String(\n  sub.items?.data?.[0]?.price?.nickname || sub.items?.data?.[0]?.plan?.nickname || 'VIP Membership'\n).trim();\nconst graceHours = Number(cfg.graceHours || 48);\nconst graceExpiresAt = new Date(Date.now() + graceHours * 3600 * 1000).toISOString();\n\nreturn [{\n  json: {\n    eventType,\n    lifecycleAction,\n    subStatus,\n    subscriptionId: String(sub.id || ''),\n    customerId: String(sub.customer || customer.id || ''),\n    cleanPhone,\n    memberName: String(customer.name || 'Member').trim(),\n    email: String(customer.email || '').trim(),\n    planName,\n    graceHours,\n    graceExpiresAt,\n    communityName: cfg.communityName,\n    vipGroupId: cfg.vipGroupId,\n    spreadsheetId: cfg.spreadsheetId,\n    slackOpsChannelId: cfg.slackOpsChannelId,\n    checkoutUrl: cfg.checkoutUrl,\n    portalReturnUrl: cfg.portalReturnUrl,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000015",
+      "name": "Route Subscription Lifecycle",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1100,
+        380
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "lc-grant",
+                    "leftValue": "={{ $json.lifecycleAction }}",
+                    "rightValue": "grant_access",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Grant Access"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "lc-grace",
+                    "leftValue": "={{ $json.lifecycleAction }}",
+                    "rightValue": "grace_warning",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Past-Due Warning"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "lc-revoke",
+                    "leftValue": "={{ $json.lifecycleAction }}",
+                    "rightValue": "revoke_access",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Revoke Access"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000016",
+      "name": "Add Member to VIP Group",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "group",
+        "operation": "addParticipant",
+        "groupId": "={{ $json.vipGroupId }}",
+        "participantPhone": "={{ $json.cleanPhone }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000017",
+      "name": "Was Direct Add Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "direct-add-ok",
+              "leftValue": "={{ !$json.error && $json.success !== false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000018",
+      "name": "Send Welcome DM to Member",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        140
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+        "message": "=Welcome to {{ $('Normalize Member and Subscription').item.json.communityName }}, {{ $('Normalize Member and Subscription').item.json.memberName }}! Your {{ $('Normalize Member and Subscription').item.json.planName }} subscription is active and we have added you directly to the private WhatsApp group. Introduce yourself anytime!",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000019",
+      "name": "Upsert Active Member in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        140
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Member and Subscription').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customerId": "={{ $('Normalize Member and Subscription').item.json.customerId }}",
+            "subscriptionId": "={{ $('Normalize Member and Subscription').item.json.subscriptionId }}",
+            "phone": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+            "memberName": "={{ $('Normalize Member and Subscription').item.json.memberName }}",
+            "email": "={{ $('Normalize Member and Subscription').item.json.email }}",
+            "planName": "={{ $('Normalize Member and Subscription').item.json.planName }}",
+            "status": "Active",
+            "accessMethod": "direct_add",
+            "inGroup": "Yes",
+            "graceExpiresAt": "",
+            "joinedAt": "={{ $now.toISO() }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "customerId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000020",
+      "name": "Fetch Private Group Invite Link",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1740,
+        290
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "group",
+        "operation": "getInviteLink",
+        "groupId": "={{ $('Normalize Member and Subscription').item.json.vipGroupId }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000021",
+      "name": "Send Invite Link Fallback DM",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1940,
+        290
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+        "message": "=Welcome to {{ $('Normalize Member and Subscription').item.json.communityName }}, {{ $('Normalize Member and Subscription').item.json.memberName }}! Your WhatsApp privacy settings prevented an automatic add, so tap your private invite link below to join the VIP group (please do not forward — access is verified by phone number): {{ $json.inviteLink || $json.value?.inviteLink || $json.link }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000022",
+      "name": "Upsert Invited Member in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2120,
+        290
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Member and Subscription').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customerId": "={{ $('Normalize Member and Subscription').item.json.customerId }}",
+            "subscriptionId": "={{ $('Normalize Member and Subscription').item.json.subscriptionId }}",
+            "phone": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+            "memberName": "={{ $('Normalize Member and Subscription').item.json.memberName }}",
+            "email": "={{ $('Normalize Member and Subscription').item.json.email }}",
+            "planName": "={{ $('Normalize Member and Subscription').item.json.planName }}",
+            "status": "Active",
+            "accessMethod": "invite_link",
+            "inGroup": "Pending",
+            "graceExpiresAt": "",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "customerId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000023",
+      "name": "Log New Member in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        2340,
+        210
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Normalize Member and Subscription').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'New VIP WhatsApp member provisioned\\nMember: ' + $('Normalize Member and Subscription').item.json.memberName + ' (+' + $('Normalize Member and Subscription').item.json.cleanPhone + ')\\nPlan: ' + $('Normalize Member and Subscription').item.json.planName + '\\nStripe Customer: ' + $('Normalize Member and Subscription').item.json.customerId }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000024",
+      "name": "Create Billing Portal Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        440
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-cred",
+          "name": "Stripe API"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/billing_portal/sessions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customer",
+              "value": "={{ $json.customerId }}"
+            },
+            {
+              "name": "return_url",
+              "value": "={{ $json.portalReturnUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000025",
+      "name": "Send 48h Grace Warning DM",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        440
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+        "message": "=Hi {{ $('Normalize Member and Subscription').item.json.memberName }}, your renewal for {{ $('Normalize Member and Subscription').item.json.communityName }} did not go through. Your VIP WhatsApp group access stays active for the next {{ $('Normalize Member and Subscription').item.json.graceHours }} hours — please update your payment method here to avoid automatic removal: {{ $json.url || $('Normalize Member and Subscription').item.json.portalReturnUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000026",
+      "name": "Mark Member Past Due in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1820,
+        440
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Member and Subscription').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customerId": "={{ $('Normalize Member and Subscription').item.json.customerId }}",
+            "subscriptionId": "={{ $('Normalize Member and Subscription').item.json.subscriptionId }}",
+            "phone": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+            "memberName": "={{ $('Normalize Member and Subscription').item.json.memberName }}",
+            "status": "Past Due",
+            "graceExpiresAt": "={{ $('Normalize Member and Subscription').item.json.graceExpiresAt }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "customerId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000027",
+      "name": "Remove Churned Member from Group",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        620
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "group",
+        "operation": "removeParticipant",
+        "groupId": "={{ $json.vipGroupId }}",
+        "participantPhone": "={{ $json.cleanPhone }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000028",
+      "name": "Send Exit and Win-Back DM",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        620
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+        "message": "=Hi {{ $('Normalize Member and Subscription').item.json.memberName }}, your {{ $('Normalize Member and Subscription').item.json.communityName }} subscription has ended, so we have removed your number from the private WhatsApp group. Thank you for being part of the community — you can rejoin anytime here: {{ $('Normalize Member and Subscription').item.json.checkoutUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000029",
+      "name": "Mark Member Removed in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1820,
+        620
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Member and Subscription').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customerId": "={{ $('Normalize Member and Subscription').item.json.customerId }}",
+            "subscriptionId": "={{ $('Normalize Member and Subscription').item.json.subscriptionId }}",
+            "phone": "={{ $('Normalize Member and Subscription').item.json.cleanPhone }}",
+            "status": "Removed",
+            "inGroup": "No",
+            "graceExpiresAt": "",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "customerId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000030",
+      "name": "Notify Churn Removal in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        2060,
+        620
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Normalize Member and Subscription').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Churned member removed from VIP WhatsApp group\\nMember: ' + $('Normalize Member and Subscription').item.json.memberName + ' (+' + $('Normalize Member and Subscription').item.json.cleanPhone + ')\\nPlan: ' + $('Normalize Member and Subscription').item.json.planName + '\\nStripe Status: ' + $('Normalize Member and Subscription').item.json.subStatus }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000040",
+      "name": "When Someone Joins VIP Group",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1060
+      ],
+      "webhookId": "c8080008-8888-4888-8888-200000000040",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "participant_joined"
+        ],
+        "onlyIncoming": false
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000041",
+      "name": "Guard Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        1060
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "g1",
+              "name": "communityName",
+              "value": "Founders Circle VIP",
+              "type": "string"
+            },
+            {
+              "id": "g2",
+              "name": "vipGroupId",
+              "value": "SET_WHATSAPP_GROUP_ID",
+              "type": "string"
+            },
+            {
+              "id": "g3",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "g4",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "g5",
+              "name": "checkoutUrl",
+              "value": "https://example.com/join",
+              "type": "string"
+            },
+            {
+              "id": "g6",
+              "name": "adminPhonesCsv",
+              "value": "SET_ADMIN_PHONES_CSV",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000042",
+      "name": "Filter Target VIP Group Join",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        1060
+      ],
+      "parameters": {
+        "jsCode": "const ev = $('When Someone Joins VIP Group').first().json;\nconst cfg = $('Guard Configuration').first().json;\nconst chatId = String(ev.chat?.id || ev.groupId || '').trim();\nif (!chatId || chatId !== String(cfg.vipGroupId || '').trim()) return [];\n\nconst adminSet = new Set(\n  String(cfg.adminPhonesCsv || '')\n    .split(',')\n    .map((p) => p.replace(/\\D/g, ''))\n    .filter((p) => p.length >= 8)\n);\n\nconst rawParticipants = Array.isArray(ev.participants)\n  ? ev.participants\n  : ev.from?.id ? [ev.from.id] : [];\n\nconst results = [];\nfor (const entry of rawParticipants) {\n  const digits = String(entry || '').split('@')[0].replace(/\\D/g, '');\n  if (digits.length < 8 || adminSet.has(digits)) continue;\n  results.push({\n    json: {\n      joinerPhone: digits,\n      vipGroupId: cfg.vipGroupId,\n      communityName: cfg.communityName,\n      spreadsheetId: cfg.spreadsheetId,\n      slackOpsChannelId: cfg.slackOpsChannelId,\n      checkoutUrl: cfg.checkoutUrl,\n    },\n  });\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000043",
+      "name": "Lookup Joiner in Member Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        680,
+        1060
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "phone",
+              "lookupValue": "={{ $json.joinerPhone }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000044",
+      "name": "Verify Paid Membership Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        1060
+      ],
+      "parameters": {
+        "jsCode": "const joiners = $('Filter Target VIP Group Join').all().map((i) => i.json);\nconst rows = $input.all().map((i) => i.json).filter((r) => r && r.phone);\nconst byPhone = new Map();\nfor (const r of rows) {\n  const phone = String(r.phone || '').replace(/\\D/g, '');\n  if (phone) byPhone.set(phone, r);\n}\nreturn joiners.map((joiner) => {\n  const row = byPhone.get(joiner.joinerPhone);\n  const isAuthorized = Boolean(row && (row.status === 'Active' || row.status === 'Past Due'));\n  return {\n    json: {\n      ...joiner,\n      isAuthorized,\n      customerId: row ? String(row.customerId || '') : '',\n      memberName: row ? String(row.memberName || 'New Member') : 'Unknown',\n      planName: row ? String(row.planName || 'VIP') : '',\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000045",
+      "name": "Is Joiner an Active Member?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        1060
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-ok",
+              "leftValue": "={{ $json.isAuthorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000046",
+      "name": "Welcome Member in VIP Group",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        970
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.vipGroupId }}",
+        "message": "=Everyone please welcome {{ $json.memberName }} to {{ $json.communityName }}! Drop a quick intro whenever you have a minute.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000047",
+      "name": "Mark Joined Timestamp in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1680,
+        970
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Verify Paid Membership Status').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customerId": "={{ $('Verify Paid Membership Status').item.json.customerId }}",
+            "inGroup": "Yes",
+            "joinedAt": "={{ $now.toISO() }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "customerId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000048",
+      "name": "Evict Unauthorized Joiner",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        1150
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "group",
+        "operation": "removeParticipant",
+        "groupId": "={{ $json.vipGroupId }}",
+        "participantPhone": "={{ $json.joinerPhone }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000049",
+      "name": "Send Checkout Link to Evicted User",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        1150
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Verify Paid Membership Status').item.json.joinerPhone }}",
+        "message": "=Hi! {{ $('Verify Paid Membership Status').item.json.communityName }} is a private members-only WhatsApp group, and we could not find an active subscription for your phone number. Subscribe here for instant access: {{ $('Verify Paid Membership Status').item.json.checkoutUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000050",
+      "name": "Alert Admins of Leaked Link in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1940,
+        1150
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Verify Paid Membership Status').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Anti-leak alert: Unauthorized WhatsApp joiner auto-removed\\nPhone: +' + $('Verify Paid Membership Status').item.json.joinerPhone + '\\nCommunity: ' + $('Verify Paid Membership Status').item.json.communityName + '\\nAction: Evicted from group and sent checkout link. Consider rotating the group invite link if this repeats.' }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000060",
+      "name": "Daily 8am Roster Audit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1560
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000061",
+      "name": "Audit Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        1560
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "communityName",
+              "value": "Founders Circle VIP",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "vipGroupId",
+              "value": "SET_WHATSAPP_GROUP_ID",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "checkoutUrl",
+              "value": "https://example.com/join",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "adminPhonesCsv",
+              "value": "SET_ADMIN_PHONES_CSV",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000062",
+      "name": "Fetch Live WhatsApp Group Members",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        440,
+        1560
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "group",
+        "operation": "getMembers",
+        "groupId": "={{ $json.vipGroupId }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000063",
+      "name": "Extract Live Non-Admin Phones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        1560
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Audit Configuration').first().json;\nconst rawItems = $input.all().map((i) => i.json);\nconst members = [];\nfor (const item of rawItems) {\n  if (Array.isArray(item.members)) members.push(...item.members);\n  else if (Array.isArray(item.value?.members)) members.push(...item.value.members);\n  else if (item.id) members.push(item);\n}\nconst adminSet = new Set(\n  String(cfg.adminPhonesCsv || '')\n    .split(',')\n    .map((p) => p.replace(/\\D/g, ''))\n    .filter((p) => p.length >= 8)\n);\nconst livePhones = [];\nfor (const m of members) {\n  if (m.isAdmin || m.isSuperAdmin) continue;\n  const idStr = String(m.id || '');\n  if (idStr.endsWith('@lid')) continue;\n  const phone = idStr.split('@')[0].replace(/\\D/g, '');\n  if (phone.length < 8 || adminSet.has(phone)) continue;\n  livePhones.push(phone);\n}\nreturn [{ json: { ...cfg, livePhones: [...new Set(livePhones)], totalLiveCount: members.length } }];"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000064",
+      "name": "Read Full Member Ledger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        1560
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000065",
+      "name": "Compare Live Group vs Paid Ledger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        1560
+      ],
+      "parameters": {
+        "jsCode": "const live = $('Extract Live Non-Admin Phones').first().json;\nconst rows = $input.all().map((i) => i.json).filter((r) => r && r.phone);\nconst now = Date.now();\n\nconst byPhone = new Map();\nfor (const row of rows) {\n  const p = String(row.phone || '').replace(/\\D/g, '');\n  if (p) byPhone.set(p, row);\n}\n\nconst evictions = [];\nfor (const phone of live.livePhones || []) {\n  const row = byPhone.get(phone);\n  if (!row) {\n    evictions.push({\n      json: {\n        action: 'evict',\n        phone,\n        customerId: '',\n        memberName: 'Unlisted Member',\n        reason: 'Not found in paid Stripe ledger',\n        vipGroupId: live.vipGroupId,\n        communityName: live.communityName,\n        spreadsheetId: live.spreadsheetId,\n        slackOpsChannelId: live.slackOpsChannelId,\n        checkoutUrl: live.checkoutUrl,\n      },\n    });\n    continue;\n  }\n  const graceExpired = row.status === 'Past Due' && row.graceExpiresAt && Date.parse(row.graceExpiresAt) <= now;\n  const revoked = row.status !== 'Active' && row.status !== 'Past Due';\n  if (graceExpired || revoked) {\n    evictions.push({\n      json: {\n        action: 'evict',\n        phone,\n        customerId: String(row.customerId || ''),\n        memberName: String(row.memberName || 'Member'),\n        reason: graceExpired ? '48h Past-Due grace period expired' : `Ledger status is ${row.status}`,\n        vipGroupId: live.vipGroupId,\n        communityName: live.communityName,\n        spreadsheetId: live.spreadsheetId,\n        slackOpsChannelId: live.slackOpsChannelId,\n        checkoutUrl: live.checkoutUrl,\n      },\n    });\n  }\n}\n\nif (evictions.length > 0) return evictions;\nreturn [{\n  json: {\n    action: 'clean_summary',\n    totalLiveCount: live.totalLiveCount,\n    checkedMembers: (live.livePhones || []).length,\n    communityName: live.communityName,\n    slackOpsChannelId: live.slackOpsChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000066",
+      "name": "Has Unauthorized or Expired Members?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        1560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-evict",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "evict",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000067",
+      "name": "Evict Expired or Unlisted Member",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        1480
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "group",
+        "operation": "removeParticipant",
+        "groupId": "={{ $json.vipGroupId }}",
+        "participantPhone": "={{ $json.phone }}"
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000068",
+      "name": "Notify Evicted Member on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        1480
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Compare Live Group vs Paid Ledger').item.json.phone }}",
+        "message": "=Hi {{ $('Compare Live Group vs Paid Ledger').item.json.memberName }}, our daily membership check removed your number from {{ $('Compare Live Group vs Paid Ledger').item.json.communityName }} ({{ $('Compare Live Group vs Paid Ledger').item.json.reason }}). Renew anytime here for instant re-entry: {{ $('Compare Live Group vs Paid Ledger').item.json.checkoutUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000069",
+      "name": "Sync Eviction Status in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2020,
+        1480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Compare Live Group vs Paid Ledger').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Members",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customerId": "={{ $('Compare Live Group vs Paid Ledger').item.json.customerId || 'UNLISTED' }}",
+            "phone": "={{ $('Compare Live Group vs Paid Ledger').item.json.phone }}",
+            "memberName": "={{ $('Compare Live Group vs Paid Ledger').item.json.memberName }}",
+            "status": "Removed",
+            "inGroup": "No",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "phone"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000070",
+      "name": "Post Audit Eviction to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        2220,
+        1480
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Compare Live Group vs Paid Ledger').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Daily WhatsApp group audit evicted a member\\nMember: ' + $('Compare Live Group vs Paid Ledger').item.json.memberName + ' (+' + $('Compare Live Group vs Paid Ledger').item.json.phone + ')\\nReason: ' + $('Compare Live Group vs Paid Ledger').item.json.reason }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000071",
+      "name": "Post Clean Audit Digest to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1580,
+        1660
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Daily VIP WhatsApp roster audit clean for ' + $json.communityName + ': verified ' + $json.checkedMembers + ' non-admin members (' + $json.totalLiveCount + ' total in group), 0 unauthorized or expired members found.' }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000080",
+      "name": "On Community Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1940
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "c8080008-8888-4888-8888-000000000081",
+      "name": "Alert Ops on Error in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        280,
+        1940
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SET_SLACK_CHANNEL_ID"
+        },
+        "text": "={{ 'Paid WhatsApp Community workflow failed\\nWorkflow: ' + ($json.workflow?.name || 'Unknown') + '\\nNode: ' + ($json.execution?.lastNodeExecuted || 'Unknown') + '\\nError: ' + ($json.execution?.error?.message || 'No message') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On Stripe Subscription Event": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Stripe Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Stripe Events": {
+      "main": [
+        [
+          {
+            "node": "Community Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Community Configuration": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stripe Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stripe Customer": {
+      "main": [
+        [
+          {
+            "node": "Normalize Member and Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Member and Subscription": {
+      "main": [
+        [
+          {
+            "node": "Route Subscription Lifecycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Subscription Lifecycle": {
+      "main": [
+        [
+          {
+            "node": "Add Member to VIP Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Billing Portal Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Remove Churned Member from Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Member to VIP Group": {
+      "main": [
+        [
+          {
+            "node": "Was Direct Add Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Direct Add Successful?": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome DM to Member",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Private Group Invite Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome DM to Member": {
+      "main": [
+        [
+          {
+            "node": "Upsert Active Member in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Active Member in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Log New Member in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Private Group Invite Link": {
+      "main": [
+        [
+          {
+            "node": "Send Invite Link Fallback DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Invite Link Fallback DM": {
+      "main": [
+        [
+          {
+            "node": "Upsert Invited Member in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Invited Member in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Log New Member in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Billing Portal Session": {
+      "main": [
+        [
+          {
+            "node": "Send 48h Grace Warning DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send 48h Grace Warning DM": {
+      "main": [
+        [
+          {
+            "node": "Mark Member Past Due in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Churned Member from Group": {
+      "main": [
+        [
+          {
+            "node": "Send Exit and Win-Back DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Exit and Win-Back DM": {
+      "main": [
+        [
+          {
+            "node": "Mark Member Removed in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Member Removed in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Notify Churn Removal in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Someone Joins VIP Group": {
+      "main": [
+        [
+          {
+            "node": "Guard Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard Configuration": {
+      "main": [
+        [
+          {
+            "node": "Filter Target VIP Group Join",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Target VIP Group Join": {
+      "main": [
+        [
+          {
+            "node": "Lookup Joiner in Member Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Joiner in Member Sheet": {
+      "main": [
+        [
+          {
+            "node": "Verify Paid Membership Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Paid Membership Status": {
+      "main": [
+        [
+          {
+            "node": "Is Joiner an Active Member?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Joiner an Active Member?": {
+      "main": [
+        [
+          {
+            "node": "Welcome Member in VIP Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evict Unauthorized Joiner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Member in VIP Group": {
+      "main": [
+        [
+          {
+            "node": "Mark Joined Timestamp in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evict Unauthorized Joiner": {
+      "main": [
+        [
+          {
+            "node": "Send Checkout Link to Evicted User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Checkout Link to Evicted User": {
+      "main": [
+        [
+          {
+            "node": "Alert Admins of Leaked Link in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 8am Roster Audit": {
+      "main": [
+        [
+          {
+            "node": "Audit Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Configuration": {
+      "main": [
+        [
+          {
+            "node": "Fetch Live WhatsApp Group Members",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Live WhatsApp Group Members": {
+      "main": [
+        [
+          {
+            "node": "Extract Live Non-Admin Phones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Live Non-Admin Phones": {
+      "main": [
+        [
+          {
+            "node": "Read Full Member Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Full Member Ledger": {
+      "main": [
+        [
+          {
+            "node": "Compare Live Group vs Paid Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Live Group vs Paid Ledger": {
+      "main": [
+        [
+          {
+            "node": "Has Unauthorized or Expired Members?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Unauthorized or Expired Members?": {
+      "main": [
+        [
+          {
+            "node": "Evict Expired or Unlisted Member",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post Clean Audit Digest to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evict Expired or Unlisted Member": {
+      "main": [
+        [
+          {
+            "node": "Notify Evicted Member on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Evicted Member on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Sync Eviction Status in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Eviction Status in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Post Audit Eviction to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Community Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops on Error in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "Stripe"
+    },
+    {
+      "name": "Community"
+    },
+    {
+      "name": "Supergreen"
+    }
+  ]
+}
