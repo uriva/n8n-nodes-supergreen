@@ -2,82 +2,290 @@
   "name": "Manage Paid WhatsApp VIP Group Access and Anti-Leak Moderation with Stripe, Google Sheets, Slack, and Supergreen",
   "nodes": [
     {
-      "id": "c8080008-8888-4888-8888-000000000001",
+      "id": "c8080008-8888-4888-9999-000000000001",
       "name": "Workflow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        40
+        -608,
+        -80
       ],
       "parameters": {
-        "width": 580,
-        "height": 1580,
-        "content": "## Paid WhatsApp VIP Community Access Manager & Anti-Leak Moderation Engine\n\n### Who this is for\nCreators, cohort coaches, paid newsletters, trading/investing groups, and SaaS communities selling access to a private WhatsApp group via Stripe who are tired of manually adding new subscribers, chasing failed renewals, kicking churned members, and policing leaked invite links.\n\n### Why Supergreen?\nMeta's official WhatsApp Business Cloud API does not support WhatsApp group membership management (`addParticipant`, `removeParticipant`, `getMembers`, `getInviteLink`, or `participant_joined` events). This workflow uses the `n8n-nodes-supergreen` community node to automate the full paid-community lifecycle end to end.\n\n### Architecture (4 Coordinated Flows)\n1. **Flow 1 - Real-Time Stripe Subscription Provisioning, Grace Period & Churn Removal:**\n   - **Stripe Trigger** listens to `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`, deduplicates retries via **Remove Duplicates**, and fetches the full **Stripe Customer** record to normalize the member's E.164 WhatsApp phone number.\n   - **Grant Access (`active` / `trialing`):** Calls **Supergreen Group -> Add Participant** directly. Because WhatsApp users can restrict who adds them to groups, the node uses `continueRegularOutput`: if direct-add succeeds, it sends a welcome DM; if privacy blocks direct-add, it automatically fetches the private group invite link (`getInviteLink`) and DMs it as a fallback. Both paths upsert `Active` in the **Google Sheets** `Members` ledger and log the join in **Slack**.\n   - **Past-Due Grace Window (`past_due`):** Creates a live **Stripe Billing Portal Session** (`POST /v1/billing_portal/sessions`), DMs the member a 48-hour payment update warning, and records `Past Due` + `graceExpiresAt` in Google Sheets.\n   - **Revoke Access (`canceled` / `unpaid` / `deleted`):** Removes the churned member via **Supergreen Group -> Remove Participant**, sends a polite exit + rejoin DM, updates Google Sheets to `Removed`, and posts a churn alert to Slack.\n2. **Flow 2 - Real-Time Anti-Leak Gatekeeper & Automated Group Welcome:**\n   - **Supergreen Trigger** (`participant_joined`) fires whenever anyone joins your VIP WhatsApp group (including via a forwarded or leaked invite link).\n   - Verifies the joiner's phone against the **Google Sheets** `Members` ledger (ignoring configured admin phones).\n   - **Paid member:** Posts a personalized welcome message inside the VIP group and records `inGroup = Yes` + `joinedAt` in Sheets.\n   - **Unauthorized joiner:** Immediately removes them from the group (`removeParticipant`), DMs them your official signup/checkout link, and alerts admins in Slack of a potential invite-link leak.\n3. **Flow 3 - Daily Live Group Roster Reconciliation & Grace-Expiry Enforcement:**\n   - Runs every morning at 08:00 via **Schedule Trigger**.\n   - Pulls the live WhatsApp group roster (**Supergreen Group -> Get Members**), collapses it cleanly to one payload, and compares every non-admin participant against the Google Sheets ledger.\n   - Automatically evicts any member whose 48-hour `Past Due` grace period expired or who is present in the group without an active subscription, notifies them on WhatsApp, syncs the sheet, and posts a daily audit summary to Slack.\n4. **Flow 4 - Workflow Error Monitoring:**\n   - Captures any runtime failure via **Error Trigger** and alerts your Slack ops channel immediately.\n\n### Setup Checklist\n1. Install the community node `n8n-nodes-supergreen` and make sure your connected WhatsApp number is a **Group Admin** in the VIP WhatsApp group.\n2. Connect credentials for **Stripe API**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n3. Create a Google Sheet with a tab named `Members` and columns: `customerId`, `subscriptionId`, `phone`, `memberName`, `email`, `planName`, `status`, `accessMethod`, `inGroup`, `graceExpiresAt`, `joinedAt`, `updatedAt`.\n4. Fill in the placeholders (`SET_WHATSAPP_GROUP_ID`, `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, `SET_ADMIN_PHONES_CSV`, and your checkout/billing URLs) inside the 3 Configuration nodes (`Community Configuration`, `Guard Configuration`, `Audit Configuration`) and the Slack error node.\n5. Collect the subscriber's WhatsApp phone number at Stripe Checkout (`phone_number_collection[enabled]=true` or customer `metadata.whatsapp_phone`)."
+        "content": "## Manage paid WhatsApp VIP group access with Stripe, Supergreen, Sheets and Slack\n\n### How it works\n\n1. Listens to Stripe subscription webhooks, deduplicates retries, and automatically adds active subscribers to a private WhatsApp group via Supergreen (falling back to a private invite-link DM if WhatsApp privacy blocks direct addition).\n2. Sends 48-hour Stripe Billing Portal grace warnings when payments go past due, and automatically removes canceled or unpaid members from the group.\n3. Monitors live `participant_joined` group events to welcome verified paying members and immediately evict unauthorized joiners from leaked invite links.\n4. Runs a daily 08:00 roster reconciliation comparing live WhatsApp group members against the Google Sheets ledger to evict expired grace-period or unlisted participants.\n5. Logs lifecycle events, leak alerts, daily audit digests, and workflow errors to Slack.\n\n### Setup steps\n\n- [ ] Install the `n8n-nodes-supergreen` community node and ensure your connected WhatsApp number is a **Group Admin** in your VIP WhatsApp group.\n- [ ] Connect credentials for **Stripe API**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n- [ ] Create a Google Sheet with a `Members` tab containing columns: `customerId`, `subscriptionId`, `phone`, `memberName`, `email`, `planName`, `status`, `accessMethod`, `inGroup`, `graceExpiresAt`, `joinedAt`, `updatedAt`.\n- [ ] Replace `SET_WHATSAPP_GROUP_ID`, `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, `SET_ADMIN_PHONES_CSV`, and your checkout/billing URLs in the 3 configuration nodes and error alert node.\n- [ ] Enable phone collection in Stripe Checkout (`phone_number_collection`) or store `metadata.whatsapp_phone` on Stripe customers.\n\n### Customization\n\nAdjust `graceHours` (default 48) in `Community Configuration`, edit the WhatsApp welcome and win-back copy, or swap Google Sheets for Airtable or Postgres as your member ledger.",
+        "width": 480,
+        "height": 896
       }
     },
     {
-      "id": "c8080008-8888-4888-8888-000000000002",
-      "name": "Flow 1 Sticky",
+      "id": "c8080008-8888-4888-9999-000000000002",
+      "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -80,
-        40
+        -48,
+        432
       ],
       "parameters": {
-        "width": 2580,
-        "height": 760,
-        "color": 7,
-        "content": "## Flow 1: Real-Time Stripe Subscription Provisioning, Privacy-Safe Invite Fallback, Grace Warning & Churn Removal\n\nAutomatically adds paying subscribers to your VIP WhatsApp group (falling back to a private invite link DM if WhatsApp privacy settings block direct add), sends 48h Billing Portal grace warnings on `past_due`, and kicks canceled/unpaid members."
+        "content": "## 1. Receive and deduplicate Stripe webhooks\n\nListens for subscription created, updated, and deleted events, deduplicates webhook retries, and loads community settings.",
+        "width": 608,
+        "height": 304,
+        "color": 7
       }
     },
     {
-      "id": "c8080008-8888-4888-8888-000000000003",
-      "name": "Flow 2 Sticky",
+      "id": "c8080008-8888-4888-9999-000000000003",
+      "name": "Sticky Note 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -80,
-        840
+        672,
+        432
       ],
       "parameters": {
-        "width": 2440,
-        "height": 460,
-        "color": 6,
-        "content": "## Flow 2: Real-Time Anti-Leak Gatekeeper & Group Welcome (`participant_joined`)\n\nFires whenever someone joins the VIP group. Welcomes verified paying members in-group and immediately removes unauthorized leaked-link joiners while alerting admins in Slack."
+        "content": "## 2. Fetch customer and route lifecycle\n\nRetrieves the full Stripe customer record, normalizes their E.164 WhatsApp phone number, and routes by subscription status.",
+        "width": 608,
+        "height": 304,
+        "color": 7
       }
     },
     {
-      "id": "c8080008-8888-4888-8888-000000000004",
-      "name": "Flow 3 Sticky",
+      "id": "c8080008-8888-4888-9999-000000000004",
+      "name": "Sticky Note 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -80,
-        1340
+        1392,
+        112
       ],
       "parameters": {
-        "width": 2440,
-        "height": 440,
-        "color": 5,
-        "content": "## Flow 3: Daily Live WhatsApp Group Roster Audit & Grace-Expiry Sweep\n\nCompares live WhatsApp group participants (`getMembers`) against the Google Sheets paid ledger every morning, evicting expired grace-period or unlisted members and posting a reconciliation report to Slack."
+        "content": "## 3. Add paying member to VIP group\n\nAttempts direct WhatsApp group addition via Supergreen and checks whether privacy restrictions blocked the add.",
+        "width": 400,
+        "height": 320,
+        "color": 7
       }
     },
     {
-      "id": "c8080008-8888-4888-8888-000000000005",
-      "name": "Flow 4 Sticky",
+      "id": "c8080008-8888-4888-9999-000000000005",
+      "name": "Sticky Note 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -80,
-        1820
+        1904,
+        -80
       ],
       "parameters": {
-        "width": 900,
-        "height": 260,
-        "color": 3,
-        "content": "## Flow 4: Community Ops Error Alerting\n\nCatches any unhandled workflow failure and notifies your Slack ops channel with the failing node and error message."
+        "content": "## 4. Confirm direct add and update ledger\n\nSends an onboarding welcome DM on WhatsApp and upserts the member as Active in Google Sheets.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000006",
+      "name": "Sticky Note 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        336
+      ],
+      "parameters": {
+        "content": "## 5. Send private invite link fallback\n\nFetches the private VIP group invite link when direct add is restricted, DMs it to the subscriber, and records pending join status.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000007",
+      "name": "Sticky Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2624,
+        64
+      ],
+      "parameters": {
+        "content": "## 6. Log new member in Slack\n\nPosts a provisioning confirmation to the community ops channel once either access path succeeds.",
+        "width": 256,
+        "height": 368,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000008",
+      "name": "Sticky Note 7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        720
+      ],
+      "parameters": {
+        "content": "## 7. Send 48h past-due grace warning\n\nGenerates a live Stripe Billing Portal session, DMs a payment update link, and logs the grace expiry timestamp in Google Sheets.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000009",
+      "name": "Sticky Note 8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        1104
+      ],
+      "parameters": {
+        "content": "## 8. Remove churned member and notify\n\nRemoves canceled or unpaid subscribers from the VIP group, sends a rejoin DM, marks Removed in Sheets, and alerts Slack.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000010",
+      "name": "Sticky Note 9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        1680
+      ],
+      "parameters": {
+        "content": "## 9. Monitor real-time VIP group joins\n\nTriggers on Supergreen participant_joined events, filters for the target VIP group, and excludes configured admin numbers.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000011",
+      "name": "Sticky Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        1680
+      ],
+      "parameters": {
+        "content": "## 10. Verify joiner against paid ledger\n\nLooks up each joining phone number in Google Sheets and checks whether they hold an Active or Past Due subscription.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000012",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        1456
+      ],
+      "parameters": {
+        "content": "## 11. Welcome verified paid member\n\nPosts a personalized welcome message inside the VIP WhatsApp group and records the joined timestamp in Sheets.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000013",
+      "name": "Sticky Note 12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        1872
+      ],
+      "parameters": {
+        "content": "## 12. Evict leaked-link joiner and alert\n\nImmediately removes unauthorized joiners, DMs them the official checkout link, and flags a possible invite-link leak in Slack.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000014",
+      "name": "Sticky Note 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2480
+      ],
+      "parameters": {
+        "content": "## 13. Fetch live WhatsApp group roster\n\nRuns daily at 08:00 to pull current WhatsApp group participants via Supergreen and extract non-admin phone numbers.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000015",
+      "name": "Sticky Note 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        2480
+      ],
+      "parameters": {
+        "content": "## 14. Reconcile live group with ledger\n\nReads the Google Sheets ledger and identifies any unlisted participants or members whose 48h grace window has expired.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000016",
+      "name": "Sticky Note 15",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        2288
+      ],
+      "parameters": {
+        "content": "## 15. Evict expired or unlisted members\n\nRemoves out-of-sync members from the group, notifies them on WhatsApp, updates the sheet ledger, and logs evictions to Slack.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000017",
+      "name": "Sticky Note 16",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        2656
+      ],
+      "parameters": {
+        "content": "## 16. Post clean daily audit summary\n\nSends a concise confirmation digest to Slack when zero unauthorized or expired members are found.",
+        "width": 256,
+        "height": 368,
+        "color": 7
+      }
+    },
+    {
+      "id": "c8080008-8888-4888-9999-000000000018",
+      "name": "Sticky Note 17",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        3088
+      ],
+      "parameters": {
+        "content": "## 17. Alert Slack on workflow errors\n\nCaptures any unhandled node failure via Error Trigger and posts the failing node and error details to Slack.",
+        "width": 400,
+        "height": 320,
+        "color": 7
       }
     },
     {
@@ -87,7 +295,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        380
+        560
       ],
       "webhookId": "c8080008-8888-4888-8888-100000000010",
       "credentials": {
@@ -110,8 +318,8 @@
       "type": "n8n-nodes-base.removeDuplicates",
       "typeVersion": 2,
       "position": [
-        220,
-        380
+        208,
+        560
       ],
       "parameters": {
         "operation": "removeItemsSeenInPreviousExecutions",
@@ -128,8 +336,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        440,
-        380
+        416,
+        560
       ],
       "parameters": {
         "mode": "manual",
@@ -189,8 +397,8 @@
       "type": "n8n-nodes-base.stripe",
       "typeVersion": 1,
       "position": [
-        660,
-        380
+        720,
+        560
       ],
       "credentials": {
         "stripeApi": {
@@ -210,8 +418,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        380
+        928,
+        560
       ],
       "parameters": {
         "jsCode": "const ev = $('On Stripe Subscription Event').first().json;\nconst cfg = $('Community Configuration').first().json;\nconst customer = $input.first().json || {};\nconst sub = ev.data?.object || {};\nconst prevStatus = String(ev.data?.previous_attributes?.status || '');\nconst subStatus = String(sub.status || '');\nconst eventType = String(ev.type || '');\n\nconst rawPhone = String(\n  customer.phone || customer.metadata?.whatsapp_phone || sub.metadata?.whatsapp_phone || ''\n).trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nlet lifecycleAction = 'ignore';\nif (eventType === 'customer.subscription.deleted' || ['canceled', 'unpaid', 'incomplete_expired'].includes(subStatus)) {\n  lifecycleAction = 'revoke_access';\n} else if (subStatus === 'past_due') {\n  lifecycleAction = 'grace_warning';\n} else if (['active', 'trialing'].includes(subStatus)) {\n  if (eventType === 'customer.subscription.created' || (prevStatus && !['active', 'trialing'].includes(prevStatus))) {\n    lifecycleAction = 'grant_access';\n  }\n}\nif (lifecycleAction === 'ignore') return [];\n\nconst planName = String(\n  sub.items?.data?.[0]?.price?.nickname || sub.items?.data?.[0]?.plan?.nickname || 'VIP Membership'\n).trim();\nconst graceHours = Number(cfg.graceHours || 48);\nconst graceExpiresAt = new Date(Date.now() + graceHours * 3600 * 1000).toISOString();\n\nreturn [{\n  json: {\n    eventType,\n    lifecycleAction,\n    subStatus,\n    subscriptionId: String(sub.id || ''),\n    customerId: String(sub.customer || customer.id || ''),\n    cleanPhone,\n    memberName: String(customer.name || 'Member').trim(),\n    email: String(customer.email || '').trim(),\n    planName,\n    graceHours,\n    graceExpiresAt,\n    communityName: cfg.communityName,\n    vipGroupId: cfg.vipGroupId,\n    spreadsheetId: cfg.spreadsheetId,\n    slackOpsChannelId: cfg.slackOpsChannelId,\n    checkoutUrl: cfg.checkoutUrl,\n    portalReturnUrl: cfg.portalReturnUrl,\n  },\n}];"
@@ -223,8 +431,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        1100,
-        380
+        1136,
+        560
       ],
       "parameters": {
         "rules": {
@@ -309,8 +517,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1340,
-        200
+        1440,
+        272
       ],
       "onError": "continueRegularOutput",
       "credentials": {
@@ -332,8 +540,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1540,
-        200
+        1648,
+        272
       ],
       "parameters": {
         "conditions": {
@@ -365,8 +573,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1760,
-        140
+        1952,
+        80
       ],
       "credentials": {
         "supergreenApi": {
@@ -388,8 +596,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1980,
-        140
+        2160,
+        80
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -438,8 +646,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1740,
-        290
+        1952,
+        464
       ],
       "credentials": {
         "supergreenApi": {
@@ -459,8 +667,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1940,
-        290
+        2160,
+        464
       ],
       "credentials": {
         "supergreenApi": {
@@ -484,8 +692,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        2120,
-        290
+        2368,
+        464
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -533,8 +741,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        2340,
-        210
+        2672,
+        272
       ],
       "credentials": {
         "slackOAuth2Api": {
@@ -561,8 +769,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1340,
-        440
+        1440,
+        848
       ],
       "credentials": {
         "stripeApi": {
@@ -598,8 +806,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1580,
-        440
+        1648,
+        848
       ],
       "credentials": {
         "supergreenApi": {
@@ -623,8 +831,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1820,
-        440
+        1856,
+        848
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -668,8 +876,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1340,
-        620
+        1440,
+        1232
       ],
       "onError": "continueRegularOutput",
       "credentials": {
@@ -691,8 +899,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1580,
-        620
+        1648,
+        1232
       ],
       "credentials": {
         "supergreenApi": {
@@ -716,8 +924,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1820,
-        620
+        1856,
+        1232
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -761,8 +969,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        2060,
-        620
+        2064,
+        1232
       ],
       "credentials": {
         "slackOAuth2Api": {
@@ -790,7 +998,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        1060
+        1808
       ],
       "webhookId": "c8080008-8888-4888-8888-200000000040",
       "credentials": {
@@ -813,8 +1021,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        220,
-        1060
+        208,
+        1808
       ],
       "parameters": {
         "mode": "manual",
@@ -868,8 +1076,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
-        1060
+        416,
+        1808
       ],
       "parameters": {
         "jsCode": "const ev = $('When Someone Joins VIP Group').first().json;\nconst cfg = $('Guard Configuration').first().json;\nconst chatId = String(ev.chat?.id || ev.groupId || '').trim();\nif (!chatId || chatId !== String(cfg.vipGroupId || '').trim()) return [];\n\nconst adminSet = new Set(\n  String(cfg.adminPhonesCsv || '')\n    .split(',')\n    .map((p) => p.replace(/\\D/g, ''))\n    .filter((p) => p.length >= 8)\n);\n\nconst rawParticipants = Array.isArray(ev.participants)\n  ? ev.participants\n  : ev.from?.id ? [ev.from.id] : [];\n\nconst results = [];\nfor (const entry of rawParticipants) {\n  const digits = String(entry || '').split('@')[0].replace(/\\D/g, '');\n  if (digits.length < 8 || adminSet.has(digits)) continue;\n  results.push({\n    json: {\n      joinerPhone: digits,\n      vipGroupId: cfg.vipGroupId,\n      communityName: cfg.communityName,\n      spreadsheetId: cfg.spreadsheetId,\n      slackOpsChannelId: cfg.slackOpsChannelId,\n      checkoutUrl: cfg.checkoutUrl,\n    },\n  });\n}\nreturn results;"
@@ -881,8 +1089,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        680,
-        1060
+        720,
+        1808
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -920,8 +1128,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        920,
-        1060
+        928,
+        1808
       ],
       "parameters": {
         "jsCode": "const joiners = $('Filter Target VIP Group Join').all().map((i) => i.json);\nconst rows = $input.all().map((i) => i.json).filter((r) => r && r.phone);\nconst byPhone = new Map();\nfor (const r of rows) {\n  const phone = String(r.phone || '').replace(/\\D/g, '');\n  if (phone) byPhone.set(phone, r);\n}\nreturn joiners.map((joiner) => {\n  const row = byPhone.get(joiner.joinerPhone);\n  const isAuthorized = Boolean(row && (row.status === 'Active' || row.status === 'Past Due'));\n  return {\n    json: {\n      ...joiner,\n      isAuthorized,\n      customerId: row ? String(row.customerId || '') : '',\n      memberName: row ? String(row.memberName || 'New Member') : 'Unknown',\n      planName: row ? String(row.planName || 'VIP') : '',\n    },\n  };\n});"
@@ -933,8 +1141,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1160,
-        1060
+        1136,
+        1808
       ],
       "parameters": {
         "conditions": {
@@ -966,8 +1174,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1420,
-        970
+        1440,
+        1616
       ],
       "credentials": {
         "supergreenApi": {
@@ -989,8 +1197,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1680,
-        970
+        1648,
+        1616
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -1031,8 +1239,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1420,
-        1150
+        1440,
+        2000
       ],
       "onError": "continueRegularOutput",
       "credentials": {
@@ -1054,8 +1262,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1680,
-        1150
+        1648,
+        2000
       ],
       "credentials": {
         "supergreenApi": {
@@ -1079,8 +1287,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        1940,
-        1150
+        1856,
+        2000
       ],
       "credentials": {
         "slackOAuth2Api": {
@@ -1108,7 +1316,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        1560
+        2608
       ],
       "parameters": {
         "rule": {
@@ -1127,8 +1335,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        220,
-        1560
+        208,
+        2608
       ],
       "parameters": {
         "mode": "manual",
@@ -1182,8 +1390,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        440,
-        1560
+        416,
+        2608
       ],
       "credentials": {
         "supergreenApi": {
@@ -1203,8 +1411,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
-        1560
+        624,
+        2608
       ],
       "parameters": {
         "jsCode": "const cfg = $('Audit Configuration').first().json;\nconst rawItems = $input.all().map((i) => i.json);\nconst members = [];\nfor (const item of rawItems) {\n  if (Array.isArray(item.members)) members.push(...item.members);\n  else if (Array.isArray(item.value?.members)) members.push(...item.value.members);\n  else if (item.id) members.push(item);\n}\nconst adminSet = new Set(\n  String(cfg.adminPhonesCsv || '')\n    .split(',')\n    .map((p) => p.replace(/\\D/g, ''))\n    .filter((p) => p.length >= 8)\n);\nconst livePhones = [];\nfor (const m of members) {\n  if (m.isAdmin || m.isSuperAdmin) continue;\n  const idStr = String(m.id || '');\n  if (idStr.endsWith('@lid')) continue;\n  const phone = idStr.split('@')[0].replace(/\\D/g, '');\n  if (phone.length < 8 || adminSet.has(phone)) continue;\n  livePhones.push(phone);\n}\nreturn [{ json: { ...cfg, livePhones: [...new Set(livePhones)], totalLiveCount: members.length } }];"
@@ -1216,8 +1424,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        880,
-        1560
+        928,
+        2608
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1247,8 +1455,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
-        1560
+        1136,
+        2608
       ],
       "parameters": {
         "jsCode": "const live = $('Extract Live Non-Admin Phones').first().json;\nconst rows = $input.all().map((i) => i.json).filter((r) => r && r.phone);\nconst now = Date.now();\n\nconst byPhone = new Map();\nfor (const row of rows) {\n  const p = String(row.phone || '').replace(/\\D/g, '');\n  if (p) byPhone.set(p, row);\n}\n\nconst evictions = [];\nfor (const phone of live.livePhones || []) {\n  const row = byPhone.get(phone);\n  if (!row) {\n    evictions.push({\n      json: {\n        action: 'evict',\n        phone,\n        customerId: '',\n        memberName: 'Unlisted Member',\n        reason: 'Not found in paid Stripe ledger',\n        vipGroupId: live.vipGroupId,\n        communityName: live.communityName,\n        spreadsheetId: live.spreadsheetId,\n        slackOpsChannelId: live.slackOpsChannelId,\n        checkoutUrl: live.checkoutUrl,\n      },\n    });\n    continue;\n  }\n  const graceExpired = row.status === 'Past Due' && row.graceExpiresAt && Date.parse(row.graceExpiresAt) <= now;\n  const revoked = row.status !== 'Active' && row.status !== 'Past Due';\n  if (graceExpired || revoked) {\n    evictions.push({\n      json: {\n        action: 'evict',\n        phone,\n        customerId: String(row.customerId || ''),\n        memberName: String(row.memberName || 'Member'),\n        reason: graceExpired ? '48h Past-Due grace period expired' : `Ledger status is ${row.status}`,\n        vipGroupId: live.vipGroupId,\n        communityName: live.communityName,\n        spreadsheetId: live.spreadsheetId,\n        slackOpsChannelId: live.slackOpsChannelId,\n        checkoutUrl: live.checkoutUrl,\n      },\n    });\n  }\n}\n\nif (evictions.length > 0) return evictions;\nreturn [{\n  json: {\n    action: 'clean_summary',\n    totalLiveCount: live.totalLiveCount,\n    checkedMembers: (live.livePhones || []).length,\n    communityName: live.communityName,\n    slackOpsChannelId: live.slackOpsChannelId,\n  },\n}];"
@@ -1260,8 +1468,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1340,
-        1560
+        1344,
+        2608
       ],
       "parameters": {
         "conditions": {
@@ -1292,8 +1500,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1580,
-        1480
+        1648,
+        2416
       ],
       "onError": "continueRegularOutput",
       "credentials": {
@@ -1315,8 +1523,8 @@
       "type": "n8n-nodes-supergreen.supergreen",
       "typeVersion": 1,
       "position": [
-        1800,
-        1480
+        1856,
+        2416
       ],
       "credentials": {
         "supergreenApi": {
@@ -1340,8 +1548,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        2020,
-        1480
+        2064,
+        2416
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -1384,8 +1592,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        2220,
-        1480
+        2272,
+        2416
       ],
       "credentials": {
         "slackOAuth2Api": {
@@ -1412,8 +1620,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        1580,
-        1660
+        1648,
+        2864
       ],
       "credentials": {
         "slackOAuth2Api": {
@@ -1441,7 +1649,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        1940
+        3248
       ],
       "parameters": {}
     },
@@ -1451,8 +1659,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        280,
-        1940
+        208,
+        3248
       ],
       "credentials": {
         "slackOAuth2Api": {
