@@ -63,7 +63,14 @@ npm install n8n-nodes-supergreen
 
 ---
 
-## 💡 Example Workflows
+## 💡 Official n8n Templates & Example Workflows
+
+### Official Published Templates on n8n.io
+1. **[Manage Paid WhatsApp VIP Group Access & Anti-Leak Moderation](https://n8n.io/workflows/23346)** (`workflows/whatsapp-paid-community-access.json`) — Auto-add paying Stripe subscribers to a private WhatsApp group (with invite-link fallback), enforce 48h grace windows, remove churned members, and auto-evict unauthorized leaked-link joiners.
+2. **[Send Stripe PDF Invoices & Recover Failed Payments on WhatsApp](https://n8n.io/workflows/23185)** (`workflows/send-whatsapp-document.json`) — Deliver official Stripe PDF receipts over WhatsApp and recover failed renewals using Stripe Billing Portal links + interactive WhatsApp polls with live charge retries.
+3. **[WhatsApp Poll Appointment Reminders & Rescheduling](https://n8n.io/workflows/22968)** (`workflows/whatsapp-appointment-reminders-polls.json`) — Send 24-hour interactive WhatsApp confirmation polls synced with Google Calendar and Google Sheets.
+
+### Starter Workflow Patterns
 
 ### 1. Inbound WhatsApp AI Responder
 - **Import JSON**: [`workflows/whatsapp-ai-auto-responder.json`](workflows/whatsapp-ai-auto-responder.json) (1-click copy or `Import from URL` at [supergreen.cc/n8n](https://supergreen.cc/n8n))
