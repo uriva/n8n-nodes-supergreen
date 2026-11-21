@@ -1,0 +1,1829 @@
+{
+  "name": "Send Shopify Order Updates, Tracking Links, and WhatsApp Delivery Feedback Polls with Supergreen",
+  "nodes": [
+    {
+      "id": "d9090009-9999-4999-8999-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        16
+      ],
+      "parameters": {
+        "content": "## Automate Shopify order updates, tracking links, and WhatsApp delivery feedback polls\n\n### How it works\n\n1. Listens for Shopify `orders/create`, `orders/fulfilled`, and `orders/cancelled` webhooks and sends instant order confirmations, carrier tracking links, and cancellation notices on WhatsApp via Supergreen without per-message fees or Meta template approvals.\n2. Logs every order and status transition in Google Sheets and alerts Slack immediately when an order exceeds your high-value VIP threshold.\n3. Runs a daily 10:00 sweep to send an interactive 3-option WhatsApp delivery feedback poll 72 hours after shipment.\n4. Captures real-time poll votes to send a review link to happy buyers, escalate damaged or missing-item issues to Slack support, or resend tracking details and alert fulfillment on delayed packages.\n5. Captures any unhandled runtime errors via Error Trigger and posts alerts to Slack.\n\n### Setup steps\n\n- [ ] Install the `n8n-nodes-supergreen` community node and connect your WhatsApp number on Supergreen.\n- [ ] Add credentials for **Shopify Access Token**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n- [ ] Create a Google Sheet with an `Orders` tab containing columns: `orderId`, `orderNumber`, `customerName`, `phone`, `email`, `total`, `items`, `status`, `trackingUrl`, `deliveryPollDueAt`, `pollSent`, `pollMessageId`, `updatedAt`.\n- [ ] Replace `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, your store name, VIP threshold, and review URL in the configuration nodes and Slack error node.\n- [ ] Enable phone number collection at Shopify Checkout so customer WhatsApp numbers are present on order payloads.\n\n### Customization\n\nAdjust `vipOrderThreshold` (default 250) and `deliveryPollDelayHours` (default 72) to match your average order value and carrier transit times, or swap Google Sheets for Airtable or Postgres.",
+        "width": 480,
+        "height": 896
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000002",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        80
+      ],
+      "parameters": {
+        "content": "## 1. Receive and normalize new orders\n\nCaptures Shopify orders/create webhooks, deduplicates retries, loads store settings, and extracts E.164 customer phone and VIP status.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000003",
+      "name": "Sticky Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        48
+      ],
+      "parameters": {
+        "content": "## 2. Confirm order and check VIP threshold\n\nSends an instant WhatsApp confirmation via Supergreen, logs the order in Google Sheets, and checks whether total exceeds the VIP threshold.",
+        "width": 608,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000004",
+      "name": "Sticky Note 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        16
+      ],
+      "parameters": {
+        "content": "## 3. Alert fulfillment on VIP orders\n\nPosts a priority notification in Slack whenever a high-value order is placed.",
+        "width": 256,
+        "height": 352,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000005",
+      "name": "Sticky Note 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        512
+      ],
+      "parameters": {
+        "content": "## 4. Receive fulfillment and extract tracking\n\nCaptures Shopify orders/fulfilled events, deduplicates retries, and extracts carrier tracking details plus the 72h delivery poll due date.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000006",
+      "name": "Sticky Note 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        480
+      ],
+      "parameters": {
+        "content": "## 5. Send tracking update and log shipment\n\nSends the live carrier tracking link on WhatsApp and updates the order row to Shipped in Google Sheets.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000007",
+      "name": "Sticky Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        944
+      ],
+      "parameters": {
+        "content": "## 6. Receive and normalize cancelled orders\n\nCaptures Shopify orders/cancelled events and resolves the customer phone number and cancellation reason.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000008",
+      "name": "Sticky Note 7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        912
+      ],
+      "parameters": {
+        "content": "## 7. Notify customer of cancellation\n\nSends a cancellation and refund timeline message on WhatsApp and marks the order Cancelled in Google Sheets.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000009",
+      "name": "Sticky Note 8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        1376
+      ],
+      "parameters": {
+        "content": "## 8. Find shipped orders due for check-in\n\nRuns daily at 10:00, reads the Orders sheet, and selects shipped orders past their 72-hour delivery poll window.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000010",
+      "name": "Sticky Note 9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        1344
+      ],
+      "parameters": {
+        "content": "## 9. Send WhatsApp delivery feedback poll\n\nSends an interactive 3-option WhatsApp poll via Supergreen and saves the pollMessageId for vote matching.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000011",
+      "name": "Sticky Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2160
+      ],
+      "parameters": {
+        "content": "## 10. Match poll vote to Shopify order\n\nTriggers on Supergreen vote events and retrieves the matching order row from Google Sheets by pollMessageId.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000012",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        2128
+      ],
+      "parameters": {
+        "content": "## 11. Validate choice and route outcome\n\nGuards against empty unvotes or duplicate votes on already-resolved orders and routes by the customer's selected poll option.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000013",
+      "name": "Sticky Note 12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1760
+      ],
+      "parameters": {
+        "content": "## 12. Collect review from happy customer\n\nMarks the order as Delivered - Happy in Sheets and sends a thank-you WhatsApp message with your review link.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000014",
+      "name": "Sticky Note 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2160
+      ],
+      "parameters": {
+        "content": "## 13. Escalate delivery issue to support\n\nMarks Issue Reported in Sheets, alerts your support team in Slack with order details, and reassures the customer on WhatsApp.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000015",
+      "name": "Sticky Note 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2544
+      ],
+      "parameters": {
+        "content": "## 14. Follow up on delayed shipment\n\nMarks the order Delayed in Sheets, resends the live tracking link on WhatsApp, and alerts fulfillment in Slack.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000016",
+      "name": "Sticky Note 15",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2912
+      ],
+      "parameters": {
+        "content": "## 15. Alert Slack on workflow errors\n\nCaptures unhandled errors via Error Trigger and posts the failing node and error message to Slack.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000010",
+      "name": "On Shopify Order Created",
+      "type": "n8n-nodes-base.shopifyTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        208
+      ],
+      "webhookId": "d9090009-9999-4999-8999-100000000010",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "shopify-cred",
+          "name": "Shopify Access Token"
+        }
+      },
+      "parameters": {
+        "authentication": "accessToken",
+        "topic": "orders/create"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000011",
+      "name": "Deduplicate Order Events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        208,
+        208
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ String($json.id) + '-create' }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000012",
+      "name": "Store Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        208
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "storeName",
+              "value": "Northwind Goods",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "vipOrderThreshold",
+              "value": 250,
+              "type": "number"
+            },
+            {
+              "id": "s3",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "s5",
+              "name": "reviewUrl",
+              "value": "https://example.com/review",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000013",
+      "name": "Normalize Order and Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        208
+      ],
+      "parameters": {
+        "jsCode": "const order = $('On Shopify Order Created').first().json || {};\nconst cfg = $('Store Configuration').first().json || {};\nconst rawPhone = String(\n  order.shipping_address?.phone || order.phone || order.customer?.phone || order.billing_address?.phone || ''\n).trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\nconst totalAmount = Number(order.total_price || 0);\nconst currency = String(order.currency || 'USD').toUpperCase();\nconst itemsSummary = (order.line_items || []).slice(0, 4).map((li) => `${li.quantity}x ${li.title}`).join(', ');\nreturn [{\n  json: {\n    orderId: String(order.id || ''),\n    orderNumber: String(order.name || ('#' + (order.order_number || order.id || ''))),\n    customerName: String(order.shipping_address?.first_name || order.customer?.first_name || 'there').trim(),\n    email: String(order.email || order.customer?.email || '').trim(),\n    cleanPhone,\n    totalFormatted: `${totalAmount.toFixed(2)} ${currency}`,\n    totalAmount,\n    itemsSummary: itemsSummary || 'Your items',\n    orderStatusUrl: String(order.order_status_url || ''),\n    isVipOrder: totalAmount >= Number(cfg.vipOrderThreshold || 250),\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n    slackOpsChannelId: cfg.slackOpsChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000014",
+      "name": "Send Order Confirmation on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        928,
+        208
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Hi {{ $json.customerName }}, thanks for ordering from {{ $json.storeName }}! Your order {{ $json.orderNumber }} ({{ $json.itemsSummary }} — {{ $json.totalFormatted }}) is confirmed. We will send your tracking link here as soon as it ships.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000015",
+      "name": "Upsert New Order in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Order and Phone').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Normalize Order and Phone').item.json.orderId }}",
+            "orderNumber": "={{ $('Normalize Order and Phone').item.json.orderNumber }}",
+            "customerName": "={{ $('Normalize Order and Phone').item.json.customerName }}",
+            "phone": "={{ $('Normalize Order and Phone').item.json.cleanPhone }}",
+            "email": "={{ $('Normalize Order and Phone').item.json.email }}",
+            "total": "={{ $('Normalize Order and Phone').item.json.totalFormatted }}",
+            "items": "={{ $('Normalize Order and Phone').item.json.itemsSummary }}",
+            "status": "Confirmed",
+            "pollSent": "No",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000016",
+      "name": "Is High-Value VIP Order?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        208
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "vip-check",
+              "leftValue": "={{ $('Normalize Order and Phone').item.json.isVipOrder }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000017",
+      "name": "Alert Fulfillment on VIP Order",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1648,
+        208
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Normalize Order and Phone').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'High-value VIP Shopify order received\\nOrder: ' + $('Normalize Order and Phone').item.json.orderNumber + ' (' + $('Normalize Order and Phone').item.json.totalFormatted + ')\\nCustomer: ' + $('Normalize Order and Phone').item.json.customerName + ' (+' + $('Normalize Order and Phone').item.json.cleanPhone + ')\\nItems: ' + $('Normalize Order and Phone').item.json.itemsSummary }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000020",
+      "name": "On Shopify Order Fulfilled",
+      "type": "n8n-nodes-base.shopifyTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        640
+      ],
+      "webhookId": "d9090009-9999-4999-8999-200000000020",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "shopify-cred",
+          "name": "Shopify Access Token"
+        }
+      },
+      "parameters": {
+        "authentication": "accessToken",
+        "topic": "orders/fulfilled"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000021",
+      "name": "Deduplicate Fulfillment Events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        208,
+        640
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ String($json.id) + '-fulfilled' }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000022",
+      "name": "Fulfillment Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        640
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "storeName",
+              "value": "Northwind Goods",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "f3",
+              "name": "deliveryPollDelayHours",
+              "value": 72,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000023",
+      "name": "Extract Tracking and Poll Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        640
+      ],
+      "parameters": {
+        "jsCode": "const order = $('On Shopify Order Fulfilled').first().json || {};\nconst cfg = $('Fulfillment Configuration').first().json || {};\nconst rawPhone = String(\n  order.shipping_address?.phone || order.phone || order.customer?.phone || order.billing_address?.phone || ''\n).trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\nconst latestFulfillment = Array.isArray(order.fulfillments) && order.fulfillments.length ? order.fulfillments[order.fulfillments.length - 1] : {};\nconst trackingCompany = String(latestFulfillment.tracking_company || 'Carrier');\nconst trackingNumber = String(latestFulfillment.tracking_number || 'Pending');\nconst trackingUrl = String(latestFulfillment.tracking_url || order.order_status_url || '');\nconst delayHours = Number(cfg.deliveryPollDelayHours || 72);\nconst deliveryPollDueAt = new Date(Date.now() + delayHours * 3600 * 1000).toISOString();\nreturn [{\n  json: {\n    orderId: String(order.id || ''),\n    orderNumber: String(order.name || ('#' + (order.order_number || order.id || ''))),\n    customerName: String(order.shipping_address?.first_name || order.customer?.first_name || 'there').trim(),\n    cleanPhone,\n    trackingCompany,\n    trackingNumber,\n    trackingUrl,\n    deliveryPollDueAt,\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000024",
+      "name": "Send Tracking Link on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        928,
+        640
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Good news {{ $json.customerName }}! Your {{ $json.storeName }} order {{ $json.orderNumber }} has shipped via {{ $json.trackingCompany }} ({{ $json.trackingNumber }}). Track your package here: {{ $json.trackingUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000025",
+      "name": "Mark Order Shipped in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        640
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Extract Tracking and Poll Schedule').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Extract Tracking and Poll Schedule').item.json.orderId }}",
+            "orderNumber": "={{ $('Extract Tracking and Poll Schedule').item.json.orderNumber }}",
+            "customerName": "={{ $('Extract Tracking and Poll Schedule').item.json.customerName }}",
+            "phone": "={{ $('Extract Tracking and Poll Schedule').item.json.cleanPhone }}",
+            "status": "Shipped",
+            "trackingUrl": "={{ $('Extract Tracking and Poll Schedule').item.json.trackingUrl }}",
+            "deliveryPollDueAt": "={{ $('Extract Tracking and Poll Schedule').item.json.deliveryPollDueAt }}",
+            "pollSent": "No",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000030",
+      "name": "On Shopify Order Cancelled",
+      "type": "n8n-nodes-base.shopifyTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1072
+      ],
+      "webhookId": "d9090009-9999-4999-8999-300000000030",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "shopify-cred",
+          "name": "Shopify Access Token"
+        }
+      },
+      "parameters": {
+        "authentication": "accessToken",
+        "topic": "orders/cancelled"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000031",
+      "name": "Cancellation Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        1072
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "x1",
+              "name": "storeName",
+              "value": "Northwind Goods",
+              "type": "string"
+            },
+            {
+              "id": "x2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000032",
+      "name": "Normalize Cancelled Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        1072
+      ],
+      "parameters": {
+        "jsCode": "const order = $('On Shopify Order Cancelled').first().json || {};\nconst cfg = $('Cancellation Configuration').first().json || {};\nconst rawPhone = String(\n  order.shipping_address?.phone || order.phone || order.customer?.phone || order.billing_address?.phone || ''\n).trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\nreturn [{\n  json: {\n    orderId: String(order.id || ''),\n    orderNumber: String(order.name || ('#' + (order.order_number || order.id || ''))),\n    customerName: String(order.shipping_address?.first_name || order.customer?.first_name || 'there').trim(),\n    cleanPhone,\n    cancelReason: String(order.cancel_reason || 'customer request'),\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000033",
+      "name": "Send Cancellation Notice on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        720,
+        1072
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Hi {{ $json.customerName }}, your {{ $json.storeName }} order {{ $json.orderNumber }} has been cancelled ({{ $json.cancelReason }}). Any eligible refund will return to your original payment method within 3-5 business days.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000034",
+      "name": "Mark Order Cancelled in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        928,
+        1072
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Cancelled Order').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Normalize Cancelled Order').item.json.orderId }}",
+            "status": "Cancelled",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000040",
+      "name": "Daily 10am Delivery Poll Sweep",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1504
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000041",
+      "name": "Poll Sweep Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        1504
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "storeName",
+              "value": "Northwind Goods",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000042",
+      "name": "Read Orders Ledger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        1504
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000043",
+      "name": "Filter Orders Due for Delivery Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        1504
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Poll Sweep Configuration').first().json || {};\nconst now = Date.now();\nconst due = [];\nfor (const item of $input.all()) {\n  const row = item.json;\n  if (!row || !row.orderId || !row.phone) continue;\n  if (row.status !== 'Shipped' || row.pollSent === 'Yes') continue;\n  const dueMs = Date.parse(String(row.deliveryPollDueAt || ''));\n  if (!Number.isFinite(dueMs) || dueMs > now) continue;\n  due.push({ json: { ...row, storeName: cfg.storeName, spreadsheetId: cfg.spreadsheetId } });\n}\nreturn due;"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000044",
+      "name": "Send Delivery Feedback Poll",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1504
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $json.phone }}",
+        "name": "=Quick check on your {{ $json.storeName }} order {{ $json.orderNumber }} — did it arrive safely?",
+        "options": "Delivered - loved it!, Delivered - had an issue, Still waiting for package"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000045",
+      "name": "Save Poll Message ID in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        1504
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Filter Orders Due for Delivery Poll').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Filter Orders Due for Delivery Poll').item.json.orderId }}",
+            "pollSent": "Yes",
+            "pollMessageId": "={{ $json.messageId || $json.id || '' }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000050",
+      "name": "When Customer Votes on Delivery Poll",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2288
+      ],
+      "webhookId": "d9090009-9999-4999-8999-500000000050",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "vote"
+        ],
+        "onlyIncoming": true
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000051",
+      "name": "Vote Handler Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        2288
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "storeName",
+              "value": "Northwind Goods",
+              "type": "string"
+            },
+            {
+              "id": "v2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "v3",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "v4",
+              "name": "reviewUrl",
+              "value": "https://example.com/review",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000052",
+      "name": "Lookup Order by Poll Message ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        2288
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "pollMessageId",
+              "lookupValue": "={{ $('When Customer Votes on Delivery Poll').item.json.messageId }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000053",
+      "name": "Validate Poll Choice and Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        2288
+      ],
+      "parameters": {
+        "jsCode": "const row = $input.first()?.json;\nif (!row || !row.orderId || row.status !== 'Shipped') return [];\nconst ev = $('When Customer Votes on Delivery Poll').first().json || {};\nconst cfg = $('Vote Handler Configuration').first().json || {};\nconst selected = ev.vote?.selectedOptionIndices;\nif (!Array.isArray(selected) || selected.length === 0) return [];\nconst idx = Number(selected[0]);\nif (idx < 0 || idx > 2) return [];\nconst outcomes = ['loved_it', 'delivery_issue', 'still_waiting'];\nreturn [{\n  json: {\n    ...row,\n    chatId: String(ev.chat?.id || row.phone),\n    outcome: outcomes[idx],\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n    slackOpsChannelId: cfg.slackOpsChannelId,\n    reviewUrl: cfg.reviewUrl,\n  },\n}];"
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000054",
+      "name": "Route Delivery Poll Outcome",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        2288
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "out-loved",
+                    "leftValue": "={{ $json.outcome }}",
+                    "rightValue": "loved_it",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Loved It"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "out-issue",
+                    "leftValue": "={{ $json.outcome }}",
+                    "rightValue": "delivery_issue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Had Issue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "out-waiting",
+                    "leftValue": "={{ $json.outcome }}",
+                    "rightValue": "still_waiting",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Still Waiting"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000055",
+      "name": "Mark Order Satisfied in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        1920
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $json.orderId }}",
+            "status": "Delivered - Happy",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000056",
+      "name": "Send Review Link on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1920
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Poll Choice and Order').item.json.chatId }}",
+        "message": "=So glad you loved order {{ $('Validate Poll Choice and Order').item.json.orderNumber }}, {{ $('Validate Poll Choice and Order').item.json.customerName }}! If you have 20 seconds, a quick review really helps {{ $('Validate Poll Choice and Order').item.json.storeName }}: {{ $('Validate Poll Choice and Order').item.json.reviewUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000057",
+      "name": "Mark Order Issue in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        2288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $json.orderId }}",
+            "status": "Issue Reported",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000058",
+      "name": "Alert Support Team in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        2288
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate Poll Choice and Order').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Delivery issue reported via WhatsApp poll\\nOrder: ' + $('Validate Poll Choice and Order').item.json.orderNumber + '\\nCustomer: ' + $('Validate Poll Choice and Order').item.json.customerName + ' (+' + $('Validate Poll Choice and Order').item.json.phone + ')\\nItems: ' + $('Validate Poll Choice and Order').item.json.items }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000059",
+      "name": "Confirm Support Follow-Up on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        2288
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Poll Choice and Order').item.json.chatId }}",
+        "message": "=Sorry to hear there was an issue with order {{ $('Validate Poll Choice and Order').item.json.orderNumber }}! Reply here with a quick note or photo and our support team (already alerted) will make it right fast.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000060",
+      "name": "Mark Shipment Delayed in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        2672
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $json.orderId }}",
+            "status": "Delayed",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000061",
+      "name": "Send Tracking Reminder on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        2672
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Poll Choice and Order').item.json.chatId }}",
+        "message": "=Thanks for letting us know! Here is the latest live tracking link for order {{ $('Validate Poll Choice and Order').item.json.orderNumber }}: {{ $('Validate Poll Choice and Order').item.json.trackingUrl }} — we have also flagged our fulfillment team to check with the carrier.",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000062",
+      "name": "Alert Fulfillment of Delay in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1648,
+        2672
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate Poll Choice and Order').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Customer still waiting for shipped Shopify order\\nOrder: ' + $('Validate Poll Choice and Order').item.json.orderNumber + '\\nCustomer: ' + $('Validate Poll Choice and Order').item.json.customerName + ' (+' + $('Validate Poll Choice and Order').item.json.phone + ')\\nTracking: ' + $('Validate Poll Choice and Order').item.json.trackingUrl }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000070",
+      "name": "On Shopify Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        3072
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "d9090009-9999-4999-8999-000000000071",
+      "name": "Alert Ops on Error in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        208,
+        3072
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SET_SLACK_CHANNEL_ID"
+        },
+        "text": "={{ 'Shopify WhatsApp Order workflow failed\\nWorkflow: ' + ($json.workflow?.name || 'Unknown') + '\\nNode: ' + ($json.execution?.lastNodeExecuted || 'Unknown') + '\\nError: ' + ($json.execution?.error?.message || 'No message') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On Shopify Order Created": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Order Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Order Events": {
+      "main": [
+        [
+          {
+            "node": "Store Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Configuration": {
+      "main": [
+        [
+          {
+            "node": "Normalize Order and Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Order and Phone": {
+      "main": [
+        [
+          {
+            "node": "Send Order Confirmation on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Order Confirmation on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Upsert New Order in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert New Order in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Is High-Value VIP Order?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is High-Value VIP Order?": {
+      "main": [
+        [
+          {
+            "node": "Alert Fulfillment on VIP Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "On Shopify Order Fulfilled": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Fulfillment Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Fulfillment Events": {
+      "main": [
+        [
+          {
+            "node": "Fulfillment Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fulfillment Configuration": {
+      "main": [
+        [
+          {
+            "node": "Extract Tracking and Poll Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Tracking and Poll Schedule": {
+      "main": [
+        [
+          {
+            "node": "Send Tracking Link on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Tracking Link on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Shipped in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Shopify Order Cancelled": {
+      "main": [
+        [
+          {
+            "node": "Cancellation Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancellation Configuration": {
+      "main": [
+        [
+          {
+            "node": "Normalize Cancelled Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Cancelled Order": {
+      "main": [
+        [
+          {
+            "node": "Send Cancellation Notice on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Cancellation Notice on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Cancelled in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 10am Delivery Poll Sweep": {
+      "main": [
+        [
+          {
+            "node": "Poll Sweep Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Sweep Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read Orders Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Orders Ledger": {
+      "main": [
+        [
+          {
+            "node": "Filter Orders Due for Delivery Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Orders Due for Delivery Poll": {
+      "main": [
+        [
+          {
+            "node": "Send Delivery Feedback Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Delivery Feedback Poll": {
+      "main": [
+        [
+          {
+            "node": "Save Poll Message ID in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Customer Votes on Delivery Poll": {
+      "main": [
+        [
+          {
+            "node": "Vote Handler Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vote Handler Configuration": {
+      "main": [
+        [
+          {
+            "node": "Lookup Order by Poll Message ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Order by Poll Message ID": {
+      "main": [
+        [
+          {
+            "node": "Validate Poll Choice and Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Poll Choice and Order": {
+      "main": [
+        [
+          {
+            "node": "Route Delivery Poll Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Delivery Poll Outcome": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Satisfied in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Order Issue in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Shipment Delayed in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Order Satisfied in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Review Link on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Order Issue in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Alert Support Team in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Support Team in Slack": {
+      "main": [
+        [
+          {
+            "node": "Confirm Support Follow-Up on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Shipment Delayed in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Tracking Reminder on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Tracking Reminder on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Alert Fulfillment of Delay in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Shopify Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops on Error in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Shopify"
+    },
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "E-commerce"
+    },
+    {
+      "name": "Supergreen"
+    }
+  ]
+}
