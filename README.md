@@ -1,6 +1,6 @@
 # n8n-nodes-supergreen
 
-This is an n8n community node for [Supergreen](https://supergreen.cc), the managed headless WhatsApp & Telegram automation infrastructure.
+This is an n8n community node for [Supergreen](https://supergreen.cc/n8n?utm_source=n8n-node&utm_medium=readme), the managed headless WhatsApp & Telegram automation infrastructure.
 
 Automate conversations, send text & media, manage groups, and receive real-time webhook events across WhatsApp and Telegram directly in your n8n workflows — **without requiring Meta Cloud API verification or template approvals**.
 
@@ -53,7 +53,7 @@ npm install n8n-nodes-supergreen
 
 ## 🔑 Credentials Setup
 
-1. Sign in to your [Supergreen Dashboard](https://supergreen.cc).
+1. Sign in to your [Supergreen Dashboard](https://supergreen.cc/app?utm_source=n8n-node&utm_medium=readme).
 2. Connect your WhatsApp number (via QR code or pairing code).
 3. Copy your account's **Secret Token**.
 4. In n8n, create a new credential under **Supergreen API**:

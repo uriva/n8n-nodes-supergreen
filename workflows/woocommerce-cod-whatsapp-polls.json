@@ -1,0 +1,1777 @@
+{
+  "name": "Confirm WooCommerce COD Orders via WhatsApp Polls and Send Order Updates with Supergreen",
+  "nodes": [
+    {
+      "id": "e5050005-5555-4555-8555-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        0
+      ],
+      "parameters": {
+        "content": "## Confirm WooCommerce Cash-on-Delivery (COD) orders via WhatsApp polls and automate order updates\n\n### How it works\n\n1. Listens for new WooCommerce orders, places Cash-on-Delivery (`cod`) orders `on-hold`, and sends a 3-option native WhatsApp confirmation poll via Supergreen — no Meta template approvals or free-text reply parsing.\n2. Captures real-time poll votes to release confirmed COD orders to `processing` in WooCommerce, flag address changes to Slack fulfillment, or auto-cancel declined COD orders before you waste shipping fees.\n3. Sends instant WhatsApp confirmations for prepaid orders and dispatched updates whenever an order transitions to `completed`.\n4. Runs a 2-hour sweep to remind buyers who have not tapped the COD poll after 4 hours and notifies Slack ops.\n5. Captures any unhandled runtime errors via Error Trigger and posts alerts to Slack.\n\n### Setup steps\n\n- [ ] Install the `n8n-nodes-supergreen` community node and connect your WhatsApp line at [supergreen.cc/n8n](https://supergreen.cc/n8n?utm_source=n8n&utm_medium=template&utm_campaign=woocommerce-cod-polls).\n- [ ] Add credentials for **WooCommerce API**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n- [ ] Create a Google Sheet with a `WooOrders` tab containing columns: `orderId`, `orderNumber`, `customerName`, `phone`, `total`, `items`, `address`, `paymentMethod`, `status`, `pollMessageId`, `reminderDueAt`, `reminderSent`, `updatedAt`.\n- [ ] Replace `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, and your store name across the configuration nodes and Slack error node.\n- [ ] Verify your WooCommerce Cash-on-Delivery gateway slug matches `cod` (or update `codPaymentMethod` in Store Configuration).\n\n### Customization\n\nAdjust `codReminderHours` (default 4) or swap Google Sheets for Airtable or Postgres, and localize poll options into your store's language.",
+        "width": 480,
+        "height": 928
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000002",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        240
+      ],
+      "parameters": {
+        "content": "## 1. Capture and normalize WooCommerce orders\n\nListens for order.created webhooks, deduplicates retries, loads store settings, and extracts E.164 phone, address, and COD status.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000003",
+      "name": "Sticky Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        128
+      ],
+      "parameters": {
+        "content": "## 2. Split COD vs prepaid orders\n\nChecks whether payment_method matches your Cash-on-Delivery method to route confirmation polls separately from prepaid orders.",
+        "width": 256,
+        "height": 400,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000004",
+      "name": "Sticky Note 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        0
+      ],
+      "parameters": {
+        "content": "## 3. Hold COD order and send WhatsApp poll\n\nPuts COD orders on-hold in WooCommerce, sends an interactive 3-option confirmation poll via Supergreen, and stores pollMessageId in Sheets.",
+        "width": 608,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000005",
+      "name": "Sticky Note 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        416
+      ],
+      "parameters": {
+        "content": "## 4. Confirm prepaid order immediately\n\nSends an instant WhatsApp receipt for prepaid orders and records them as Confirmed in Google Sheets.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000006",
+      "name": "Sticky Note 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        1312
+      ],
+      "parameters": {
+        "content": "## 5. Match poll vote to pending COD order\n\nTriggers on real-time Supergreen vote events and looks up the matching WooCommerce order by pollMessageId in Google Sheets.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000007",
+      "name": "Sticky Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        1280
+      ],
+      "parameters": {
+        "content": "## 6. Validate vote and route decision\n\nIgnores unvotes or already-resolved orders and routes confirmed, address-change, and cancelled selections down dedicated branches.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000008",
+      "name": "Sticky Note 7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        928
+      ],
+      "parameters": {
+        "content": "## 7. Release confirmed COD order for shipping\n\nUpdates WooCommerce order status to processing, marks Confirmed COD in Sheets, and notifies the customer on WhatsApp.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000009",
+      "name": "Sticky Note 8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1312
+      ],
+      "parameters": {
+        "content": "## 8. Hold order for shipping address fix\n\nFlags Address Requested in Sheets, alerts fulfillment in Slack, and asks the buyer on WhatsApp to reply with the corrected address.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000010",
+      "name": "Sticky Note 9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1696
+      ],
+      "parameters": {
+        "content": "## 9. Auto-cancel declined COD order\n\nCancels the order directly in WooCommerce before dispatch, updates Google Sheets, and sends a confirmation message on WhatsApp.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000011",
+      "name": "Sticky Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2112
+      ],
+      "parameters": {
+        "content": "## 10. Detect completed WooCommerce shipments\n\nListens for order.updated webhooks, filters for status=completed, and deduplicates notifications per order.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000012",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        2048
+      ],
+      "parameters": {
+        "content": "## 11. Send dispatched notice and update sheet\n\nNotifies the buyer on WhatsApp when their parcel ships and marks the row Completed in Google Sheets.",
+        "width": 400,
+        "height": 352,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000013",
+      "name": "Sticky Note 12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2544
+      ],
+      "parameters": {
+        "content": "## 12. Find overdue unconfirmed COD orders\n\nRuns every 2 hours to find Pending COD rows past their reminder window that have not received a follow-up yet.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000014",
+      "name": "Sticky Note 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        2544
+      ],
+      "parameters": {
+        "content": "## 13. Follow up and alert ops on stalled COD\n\nSends a WhatsApp nudge referencing the poll, marks reminderSent=Yes in Sheets, and alerts Slack ops for manual review.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000015",
+      "name": "Sticky Note 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2944
+      ],
+      "parameters": {
+        "content": "## 14. Alert Slack on workflow errors\n\nCatches unhandled workflow failures via Error Trigger and posts the failing node and error message to Slack.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000010",
+      "name": "On WooCommerce Order Created",
+      "type": "n8n-nodes-base.wooCommerceTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        368
+      ],
+      "webhookId": "e5050005-5555-4555-8555-100000000010",
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "woo-cred",
+          "name": "WooCommerce API"
+        }
+      },
+      "parameters": {
+        "event": "order.created"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000011",
+      "name": "Deduplicate New Orders",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        208,
+        368
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ String($json.id) + '-created' }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000012",
+      "name": "Store Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        368
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "storeName",
+              "value": "Cedar Market",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "codPaymentMethod",
+              "value": "cod",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "codReminderHours",
+              "value": 4,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000013",
+      "name": "Normalize Order and Payment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        368
+      ],
+      "parameters": {
+        "jsCode": "const order = $('On WooCommerce Order Created').first().json || {};\nconst cfg = $('Store Configuration').first().json || {};\nconst rawPhone = String(order.billing?.phone || order.shipping?.phone || '').trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nconst totalAmount = Number(order.total || 0);\nconst currency = String(order.currency || 'USD').toUpperCase();\nconst paymentMethod = String(order.payment_method || '').toLowerCase();\nconst isCod = paymentMethod === String(cfg.codPaymentMethod || 'cod').toLowerCase();\nconst addr = order.shipping?.address_1 ? order.shipping : (order.billing || {});\nconst shippingAddress = [addr.address_1, addr.city, addr.postcode, addr.country].filter(Boolean).join(', ');\nconst itemsSummary = (order.line_items || []).slice(0, 4).map((li) => `${li.quantity}x ${li.name}`).join(', ');\nconst reminderHours = Number(cfg.codReminderHours || 4);\nconst reminderDueAt = new Date(Date.now() + reminderHours * 3600 * 1000).toISOString();\n\nreturn [{\n  json: {\n    orderId: String(order.id || ''),\n    orderNumber: '#' + String(order.number || order.id || ''),\n    customerName: String(order.billing?.first_name || order.shipping?.first_name || 'there').trim(),\n    email: String(order.billing?.email || '').trim(),\n    cleanPhone,\n    totalFormatted: `${totalAmount.toFixed(2)} ${currency}`,\n    paymentMethod,\n    isCod,\n    shippingAddress: shippingAddress || 'Address on file',\n    itemsSummary: itemsSummary || 'Your order items',\n    reminderDueAt,\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n    slackOpsChannelId: cfg.slackOpsChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000014",
+      "name": "Is Cash on Delivery Order?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        928,
+        368
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-cod",
+              "leftValue": "={{ $json.isCod }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000015",
+      "name": "Put COD Order On Hold",
+      "type": "n8n-nodes-base.wooCommerce",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        160
+      ],
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "woo-cred",
+          "name": "WooCommerce API"
+        }
+      },
+      "parameters": {
+        "resource": "order",
+        "operation": "update",
+        "orderId": "={{ $json.orderId }}",
+        "updateFields": {
+          "status": "on-hold"
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000016",
+      "name": "Send COD Confirmation Poll",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        160
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $('Normalize Order and Payment').item.json.cleanPhone }}",
+        "name": "=Hi {{ $('Normalize Order and Payment').item.json.customerName }}! Please confirm your {{ $('Normalize Order and Payment').item.json.storeName }} Cash-on-Delivery order {{ $('Normalize Order and Payment').item.json.orderNumber }} ({{ $('Normalize Order and Payment').item.json.totalFormatted }}) to {{ $('Normalize Order and Payment').item.json.shippingAddress }}:",
+        "options": "Confirm order and ship, Update shipping address, Cancel order"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000017",
+      "name": "Log Pending COD Order in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1648,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Order and Payment').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Normalize Order and Payment').item.json.orderId }}",
+            "orderNumber": "={{ $('Normalize Order and Payment').item.json.orderNumber }}",
+            "customerName": "={{ $('Normalize Order and Payment').item.json.customerName }}",
+            "phone": "={{ $('Normalize Order and Payment').item.json.cleanPhone }}",
+            "total": "={{ $('Normalize Order and Payment').item.json.totalFormatted }}",
+            "items": "={{ $('Normalize Order and Payment').item.json.itemsSummary }}",
+            "address": "={{ $('Normalize Order and Payment').item.json.shippingAddress }}",
+            "paymentMethod": "cod",
+            "status": "Pending COD",
+            "pollMessageId": "={{ $json.messageId || $json.id || '' }}",
+            "reminderDueAt": "={{ $('Normalize Order and Payment').item.json.reminderDueAt }}",
+            "reminderSent": "No",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000018",
+      "name": "Send Prepaid Order Confirmation",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        576
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Hi {{ $json.customerName }}, thanks for your {{ $json.storeName }} order {{ $json.orderNumber }} ({{ $json.itemsSummary }} - {{ $json.totalFormatted }})! Your payment is received and we are preparing your shipment now.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000019",
+      "name": "Log Prepaid Order in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        576
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Order and Payment').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Normalize Order and Payment').item.json.orderId }}",
+            "orderNumber": "={{ $('Normalize Order and Payment').item.json.orderNumber }}",
+            "customerName": "={{ $('Normalize Order and Payment').item.json.customerName }}",
+            "phone": "={{ $('Normalize Order and Payment').item.json.cleanPhone }}",
+            "total": "={{ $('Normalize Order and Payment').item.json.totalFormatted }}",
+            "items": "={{ $('Normalize Order and Payment').item.json.itemsSummary }}",
+            "address": "={{ $('Normalize Order and Payment').item.json.shippingAddress }}",
+            "paymentMethod": "={{ $('Normalize Order and Payment').item.json.paymentMethod }}",
+            "status": "Confirmed",
+            "reminderSent": "N/A",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000020",
+      "name": "When Customer Votes on COD Poll",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1440
+      ],
+      "webhookId": "e5050005-5555-4555-8555-200000000020",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "vote"
+        ],
+        "onlyIncoming": true
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000021",
+      "name": "Vote Handler Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        1440
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "storeName",
+              "value": "Cedar Market",
+              "type": "string"
+            },
+            {
+              "id": "v2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "v3",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000022",
+      "name": "Lookup Order by Poll Message ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        1440
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "pollMessageId",
+              "lookupValue": "={{ $('When Customer Votes on COD Poll').item.json.messageId }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000023",
+      "name": "Validate COD Poll Vote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        1440
+      ],
+      "parameters": {
+        "jsCode": "const row = $input.first()?.json;\nif (!row || !row.orderId || row.status !== 'Pending COD') return [];\nconst ev = $('When Customer Votes on COD Poll').first().json || {};\nconst cfg = $('Vote Handler Configuration').first().json || {};\nconst selected = ev.vote?.selectedOptionIndices;\nif (!Array.isArray(selected) || selected.length === 0) return [];\nconst idx = Number(selected[0]);\nif (idx < 0 || idx > 2) return [];\nconst decisions = ['confirmed', 'address_change', 'cancelled'];\nreturn [{\n  json: {\n    ...row,\n    chatId: String(ev.chat?.id || row.phone),\n    decision: decisions[idx],\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n    slackOpsChannelId: cfg.slackOpsChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000024",
+      "name": "Route COD Poll Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        1440
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "d-confirm",
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "confirmed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Confirmed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "d-addr",
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "address_change",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Address Change"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "d-cancel",
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "cancelled",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cancelled"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000025",
+      "name": "Approve Order in WooCommerce",
+      "type": "n8n-nodes-base.wooCommerce",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        1056
+      ],
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "woo-cred",
+          "name": "WooCommerce API"
+        }
+      },
+      "parameters": {
+        "resource": "order",
+        "operation": "update",
+        "orderId": "={{ $json.orderId }}",
+        "updateFields": {
+          "status": "processing"
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000026",
+      "name": "Mark Order Confirmed in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        1056
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Validate COD Poll Vote').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Validate COD Poll Vote').item.json.orderId }}",
+            "status": "Confirmed COD",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000027",
+      "name": "Send Shipping Confirmed DM",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        1056
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate COD Poll Vote').item.json.chatId }}",
+        "message": "=Confirmed! Your {{ $('Validate COD Poll Vote').item.json.storeName }} order {{ $('Validate COD Poll Vote').item.json.orderNumber }} is now released for packing and dispatch. We will message you here as soon as it ships.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000028",
+      "name": "Mark Address Requested in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        1440
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $json.orderId }}",
+            "status": "Address Requested",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000029",
+      "name": "Alert Fulfillment of Address Change",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        1440
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate COD Poll Vote').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Customer requested shipping address change on COD order\\nOrder: ' + $('Validate COD Poll Vote').item.json.orderNumber + ' (' + $('Validate COD Poll Vote').item.json.total + ')\\nCustomer: ' + $('Validate COD Poll Vote').item.json.customerName + ' (+' + $('Validate COD Poll Vote').item.json.phone + ')\\nCurrent address: ' + $('Validate COD Poll Vote').item.json.address }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000030",
+      "name": "Ask Customer for New Address",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        1440
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate COD Poll Vote').item.json.chatId }}",
+        "message": "=No problem! Your order {{ $('Validate COD Poll Vote').item.json.orderNumber }} is held safely. Reply here with your updated street address and city, and our team will update the shipping label right away.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000031",
+      "name": "Cancel Order in WooCommerce",
+      "type": "n8n-nodes-base.wooCommerce",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        1824
+      ],
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "woo-cred",
+          "name": "WooCommerce API"
+        }
+      },
+      "parameters": {
+        "resource": "order",
+        "operation": "update",
+        "orderId": "={{ $json.orderId }}",
+        "updateFields": {
+          "status": "cancelled"
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000032",
+      "name": "Mark Order Cancelled in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        1824
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Validate COD Poll Vote').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Validate COD Poll Vote').item.json.orderId }}",
+            "status": "Cancelled by Customer",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000033",
+      "name": "Confirm Cancellation on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        1824
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate COD Poll Vote').item.json.chatId }}",
+        "message": "=Got it. Your {{ $('Validate COD Poll Vote').item.json.storeName }} order {{ $('Validate COD Poll Vote').item.json.orderNumber }} has been cancelled and will not be shipped. Message us anytime if you want to reorder.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000040",
+      "name": "On WooCommerce Order Updated",
+      "type": "n8n-nodes-base.wooCommerceTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2240
+      ],
+      "webhookId": "e5050005-5555-4555-8555-400000000040",
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "woo-cred",
+          "name": "WooCommerce API"
+        }
+      },
+      "parameters": {
+        "event": "order.updated"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000041",
+      "name": "Shipment Update Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        2240
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "u1",
+              "name": "storeName",
+              "value": "Cedar Market",
+              "type": "string"
+            },
+            {
+              "id": "u2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000042",
+      "name": "Filter Completed Shipments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        2240
+      ],
+      "parameters": {
+        "jsCode": "const order = $('On WooCommerce Order Updated').first().json || {};\nconst cfg = $('Shipment Update Configuration').first().json || {};\nif (String(order.status || '').toLowerCase() !== 'completed') return [];\nconst cleanPhone = String(order.billing?.phone || order.shipping?.phone || '').replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\nreturn [{\n  json: {\n    orderId: String(order.id || ''),\n    orderNumber: '#' + String(order.number || order.id || ''),\n    customerName: String(order.billing?.first_name || 'there').trim(),\n    cleanPhone,\n    storeName: cfg.storeName,\n    spreadsheetId: cfg.spreadsheetId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000043",
+      "name": "Deduplicate Completed Notices",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        624,
+        2240
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ String($json.orderId) + '-completed' }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000044",
+      "name": "Send Order Shipped Update",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        928,
+        2240
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Good news {{ $json.customerName }}! Your {{ $json.storeName }} order {{ $json.orderNumber }} has been dispatched and is on its way. Reply here if you need anything.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000045",
+      "name": "Mark Order Completed in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        2240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Filter Completed Shipments').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Filter Completed Shipments').item.json.orderId }}",
+            "status": "Completed",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000050",
+      "name": "Every 2h Unconfirmed COD Sweep",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        2672
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000051",
+      "name": "Reminder Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        2672
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "storeName",
+              "value": "Cedar Market",
+              "type": "string"
+            },
+            {
+              "id": "r2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "r3",
+              "name": "slackOpsChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000052",
+      "name": "Read WooCommerce Orders Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        2672
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000053",
+      "name": "Find Overdue Unconfirmed COD Orders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        2672
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Reminder Configuration').first().json || {};\nconst now = Date.now();\nconst overdue = [];\nfor (const item of $input.all()) {\n  const row = item.json;\n  if (!row || !row.orderId || !row.phone) continue;\n  if (row.status !== 'Pending COD' || row.reminderSent === 'Yes') continue;\n  const dueMs = Date.parse(String(row.reminderDueAt || ''));\n  if (!Number.isFinite(dueMs) || dueMs > now) continue;\n  overdue.push({ json: { ...row, storeName: cfg.storeName, spreadsheetId: cfg.spreadsheetId, slackOpsChannelId: cfg.slackOpsChannelId } });\n}\nreturn overdue;"
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000054",
+      "name": "Send COD Reminder on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        928,
+        2672
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.phone }}",
+        "message": "=Quick reminder from {{ $json.storeName }}: please tap your choice on the WhatsApp poll above to confirm Cash-on-Delivery order {{ $json.orderNumber }} ({{ $json.total }}) so we can dispatch your parcel today.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000055",
+      "name": "Mark Reminder Sent in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        2672
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Find Overdue Unconfirmed COD Orders').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "WooOrders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "orderId": "={{ $('Find Overdue Unconfirmed COD Orders').item.json.orderId }}",
+            "reminderSent": "Yes",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "orderId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000056",
+      "name": "Alert Ops of Unconfirmed COD",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1344,
+        2672
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Find Overdue Unconfirmed COD Orders').item.json.slackOpsChannelId }}"
+        },
+        "text": "={{ 'Unconfirmed COD order reminder sent\\nOrder: ' + $('Find Overdue Unconfirmed COD Orders').item.json.orderNumber + ' (' + $('Find Overdue Unconfirmed COD Orders').item.json.total + ')\\nCustomer: ' + $('Find Overdue Unconfirmed COD Orders').item.json.customerName + ' (+' + $('Find Overdue Unconfirmed COD Orders').item.json.phone + ')' }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000060",
+      "name": "On WooCommerce Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        3104
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e5050005-5555-4555-8555-000000000061",
+      "name": "Alert Ops on Error in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        208,
+        3104
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SET_SLACK_CHANNEL_ID"
+        },
+        "text": "={{ 'WooCommerce WhatsApp COD workflow failed\\nWorkflow: ' + ($json.workflow?.name || 'Unknown') + '\\nNode: ' + ($json.execution?.lastNodeExecuted || 'Unknown') + '\\nError: ' + ($json.execution?.error?.message || 'No message') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On WooCommerce Order Created": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate New Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate New Orders": {
+      "main": [
+        [
+          {
+            "node": "Store Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Configuration": {
+      "main": [
+        [
+          {
+            "node": "Normalize Order and Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Order and Payment": {
+      "main": [
+        [
+          {
+            "node": "Is Cash on Delivery Order?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Cash on Delivery Order?": {
+      "main": [
+        [
+          {
+            "node": "Put COD Order On Hold",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Prepaid Order Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Put COD Order On Hold": {
+      "main": [
+        [
+          {
+            "node": "Send COD Confirmation Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send COD Confirmation Poll": {
+      "main": [
+        [
+          {
+            "node": "Log Pending COD Order in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Prepaid Order Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Log Prepaid Order in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Customer Votes on COD Poll": {
+      "main": [
+        [
+          {
+            "node": "Vote Handler Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vote Handler Configuration": {
+      "main": [
+        [
+          {
+            "node": "Lookup Order by Poll Message ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Order by Poll Message ID": {
+      "main": [
+        [
+          {
+            "node": "Validate COD Poll Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate COD Poll Vote": {
+      "main": [
+        [
+          {
+            "node": "Route COD Poll Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route COD Poll Decision": {
+      "main": [
+        [
+          {
+            "node": "Approve Order in WooCommerce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Address Requested in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancel Order in WooCommerce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve Order in WooCommerce": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Confirmed in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Order Confirmed in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Shipping Confirmed DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Address Requested in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Alert Fulfillment of Address Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Fulfillment of Address Change": {
+      "main": [
+        [
+          {
+            "node": "Ask Customer for New Address",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Order in WooCommerce": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Cancelled in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Order Cancelled in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Confirm Cancellation on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On WooCommerce Order Updated": {
+      "main": [
+        [
+          {
+            "node": "Shipment Update Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shipment Update Configuration": {
+      "main": [
+        [
+          {
+            "node": "Filter Completed Shipments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Completed Shipments": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Completed Notices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Completed Notices": {
+      "main": [
+        [
+          {
+            "node": "Send Order Shipped Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Order Shipped Update": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Completed in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 2h Unconfirmed COD Sweep": {
+      "main": [
+        [
+          {
+            "node": "Reminder Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read WooCommerce Orders Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read WooCommerce Orders Sheet": {
+      "main": [
+        [
+          {
+            "node": "Find Overdue Unconfirmed COD Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Overdue Unconfirmed COD Orders": {
+      "main": [
+        [
+          {
+            "node": "Send COD Reminder on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send COD Reminder on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reminder Sent in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops of Unconfirmed COD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On WooCommerce Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops on Error in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "WooCommerce"
+    },
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "E-commerce"
+    },
+    {
+      "name": "Supergreen"
+    }
+  ]
+}
