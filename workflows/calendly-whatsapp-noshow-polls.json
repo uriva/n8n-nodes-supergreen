@@ -1,0 +1,1676 @@
+{
+  "name": "Reduce Calendly No-Shows with WhatsApp Confirmations and Attendance Polls via Supergreen",
+  "nodes": [
+    {
+      "id": "c6060006-6666-4666-8666-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        0
+      ],
+      "parameters": {
+        "content": "## Reduce Calendly no-shows with WhatsApp booking confirmations, 24h attendance polls, and 2h join-link nudges\n\n### How it works\n\n1. Listens for Calendly `invitee.created` and `invitee.canceled` webhooks and sends instant WhatsApp confirmations (or rebooking links) via Supergreen without Meta template approvals or per-message fees.\n2. Logs every booking in Google Sheets with precomputed 24-hour attendance poll and 2-hour final join-link timestamps.\n3. Runs an hourly sweep to send a 3-option native WhatsApp attendance poll 24 hours before the call and drops the live meeting link 2 hours before start time.\n4. Captures real-time poll votes to mark invitees Confirmed, immediately DM their direct Calendly reschedule or cancel URL, and alert the host in Slack so freed slots get refilled.\n5. Captures unhandled workflow errors via Error Trigger and posts alerts to Slack.\n\n### Setup steps\n\n- [ ] Install the `n8n-nodes-supergreen` community node and connect your WhatsApp number at [supergreen.cc/n8n](https://supergreen.cc/n8n?utm_source=n8n&utm_medium=template&utm_campaign=calendly-whatsapp-polls).\n- [ ] Add credentials for **Calendly OAuth2**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n- [ ] Collect invitee phone numbers on your Calendly event type (via SMS reminder phone or a booking form question labeled Phone / WhatsApp).\n- [ ] Create a Google Sheet with a `CalendlyBookings` tab containing columns: `bookingId`, `eventName`, `inviteeName`, `email`, `phone`, `startTimeIso`, `startTimeFormatted`, `joinUrl`, `rescheduleUrl`, `cancelUrl`, `pollDueAt`, `finalReminderDueAt`, `status`, `pollSent`, `pollMessageId`, `finalReminderSent`, `updatedAt`.\n- [ ] Replace `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, your brand name, and `rebookingUrl` across the configuration nodes and Slack error node.\n\n### Customization\n\nAdjust `pollHoursBefore` (default 24) and `finalReminderHoursBefore` (default 2) to match your sales or clinic workflow, or swap Google Sheets for HubSpot or Airtable.",
+        "width": 480,
+        "height": 960
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000002",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        240
+      ],
+      "parameters": {
+        "content": "## 1. Capture and normalize Calendly events\n\nListens for invitee.created and invitee.canceled webhooks, deduplicates retries, extracts phone numbers, and calculates 24h poll and 2h nudge times.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000003",
+      "name": "Sticky Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        160
+      ],
+      "parameters": {
+        "content": "## 2. Split new bookings vs cancellations\n\nRoutes newly created bookings and Calendly cancellations into separate confirmation and host-alert paths.",
+        "width": 256,
+        "height": 368,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000004",
+      "name": "Sticky Note 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        0
+      ],
+      "parameters": {
+        "content": "## 3. Confirm new booking and log ledger\n\nSends an instant WhatsApp booking confirmation with the join and reschedule links and stores the booking in Google Sheets.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000005",
+      "name": "Sticky Note 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        448
+      ],
+      "parameters": {
+        "content": "## 4. Handle Calendly cancellation\n\nSends a polite WhatsApp rebooking link, marks the row Canceled in Sheets, and alerts the host in Slack.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000006",
+      "name": "Sticky Note 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        1056
+      ],
+      "parameters": {
+        "content": "## 5. Find bookings due for poll or nudge\n\nRuns hourly to scan upcoming bookings in Google Sheets and flag rows entering their 24-hour poll or 2-hour final join-link window.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000007",
+      "name": "Sticky Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        976
+      ],
+      "parameters": {
+        "content": "## 6. Route due reminder stage\n\nSeparates 24-hour interactive attendance polls from 2-hour final join-link reminders.",
+        "width": 256,
+        "height": 368,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000008",
+      "name": "Sticky Note 7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        832
+      ],
+      "parameters": {
+        "content": "## 7. Send 24h WhatsApp attendance poll\n\nSends a 3-option attendance confirmation poll via Supergreen and saves pollMessageId to match live votes.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000009",
+      "name": "Sticky Note 8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1216
+      ],
+      "parameters": {
+        "content": "## 8. Send 2h final join-link nudge\n\nDrops the direct meeting link on WhatsApp two hours before start time so invitees join on time with one tap.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000010",
+      "name": "Sticky Note 9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2048
+      ],
+      "parameters": {
+        "content": "## 9. Match attendance vote to booking\n\nTriggers on Supergreen poll vote webhooks and retrieves the matching Calendly booking by pollMessageId in Google Sheets.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000011",
+      "name": "Sticky Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        2016
+      ],
+      "parameters": {
+        "content": "## 10. Validate vote and route decision\n\nFilters unvotes and already-resolved bookings and routes confirmed, reschedule, and cancel selections down separate paths.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000012",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1632
+      ],
+      "parameters": {
+        "content": "## 11. Lock in confirmed attendee\n\nMarks the booking Confirmed in Google Sheets and reassures the invitee that their meeting link will arrive 2 hours prior.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000013",
+      "name": "Sticky Note 12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2048
+      ],
+      "parameters": {
+        "content": "## 12. Send instant reschedule link and alert host\n\nMarks Reschedule Requested in Sheets, sends the invitee's direct Calendly reschedule URL on WhatsApp, and alerts the host in Slack.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000014",
+      "name": "Sticky Note 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2400
+      ],
+      "parameters": {
+        "content": "## 13. Release slot on cancel vote\n\nMarks Cancel Requested in Sheets, sends the direct Calendly cancel link on WhatsApp, and alerts the host in Slack to reclaim the time slot.",
+        "width": 608,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000015",
+      "name": "Sticky Note 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2816
+      ],
+      "parameters": {
+        "content": "## 14. Alert Slack on workflow errors\n\nCaptures unhandled errors via Error Trigger and posts the failing node and error message to Slack.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000010",
+      "name": "On Calendly Booking Event",
+      "type": "n8n-nodes-base.calendlyTrigger",
+      "typeVersion": 2,
+      "position": [
+        0,
+        368
+      ],
+      "webhookId": "c6060006-6666-4666-8666-100000000010",
+      "credentials": {
+        "calendlyOAuth2Api": {
+          "id": "calendly-cred",
+          "name": "Calendly OAuth2"
+        }
+      },
+      "parameters": {
+        "scope": "user",
+        "events": [
+          "invitee.created",
+          "invitee.canceled"
+        ]
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000011",
+      "name": "Deduplicate Calendly Events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        208,
+        368
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ String($json.event || 'evt') + '-' + String($json.payload?.uri || $json.created_at || '') }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000012",
+      "name": "Booking Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        368
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "brandName",
+              "value": "Acme Advisory",
+              "type": "string"
+            },
+            {
+              "id": "b2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "b3",
+              "name": "slackHostChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "b4",
+              "name": "rebookingUrl",
+              "value": "https://calendly.com/your-team",
+              "type": "string"
+            },
+            {
+              "id": "b5",
+              "name": "pollHoursBefore",
+              "value": 24,
+              "type": "number"
+            },
+            {
+              "id": "b6",
+              "name": "finalReminderHoursBefore",
+              "value": 2,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000013",
+      "name": "Normalize Invitee and Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        368
+      ],
+      "parameters": {
+        "jsCode": "const raw = $('On Calendly Booking Event').first().json || {};\nconst cfg = $('Booking Configuration').first().json || {};\nconst payload = raw.payload || raw;\nconst qa = Array.isArray(payload.questions_and_answers) ? payload.questions_and_answers : [];\nconst qaPhone = qa.find((q) => /phone|whatsapp|mobile/i.test(String(q.question || '')))?.answer || '';\nconst rawPhone = String(payload.text_reminder_number || qaPhone || '').trim();\nconst cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.length < 8) return [];\n\nconst startIso = String(payload.scheduled_event?.start_time || payload.event_start_time || '');\nconst startMs = Date.parse(startIso);\nconst pollMs = Number.isFinite(startMs) ? startMs - Number(cfg.pollHoursBefore || 24) * 3600 * 1000 : Date.now();\nconst finalMs = Number.isFinite(startMs) ? startMs - Number(cfg.finalReminderHoursBefore || 2) * 3600 * 1000 : Date.now();\nconst eventType = String(raw.event || 'invitee.created');\nconst bookingId = String(payload.uri || payload.scheduled_event?.uri || cleanPhone).split('/').pop() || cleanPhone;\nconst joinUrl = String(payload.scheduled_event?.location?.join_url || payload.scheduled_event?.location?.location || 'See calendar invite');\n\nreturn [{\n  json: {\n    bookingId,\n    eventType,\n    isCreated: eventType === 'invitee.created',\n    eventName: String(payload.scheduled_event?.name || 'Consultation Call'),\n    inviteeName: String(payload.name || payload.first_name || 'there').trim(),\n    inviteeEmail: String(payload.email || '').trim(),\n    cleanPhone,\n    startTimeIso: startIso,\n    startTimeFormatted: Number.isFinite(startMs) ? new Date(startMs).toUTCString() : startIso,\n    joinUrl,\n    rescheduleUrl: String(payload.reschedule_url || cfg.rebookingUrl),\n    cancelUrl: String(payload.cancel_url || cfg.rebookingUrl),\n    pollDueAt: new Date(pollMs).toISOString(),\n    finalReminderDueAt: new Date(finalMs).toISOString(),\n    brandName: cfg.brandName,\n    rebookingUrl: cfg.rebookingUrl,\n    spreadsheetId: cfg.spreadsheetId,\n    slackHostChannelId: cfg.slackHostChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000014",
+      "name": "Is Booking Created or Canceled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        928,
+        368
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-created",
+              "leftValue": "={{ $json.isCreated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000015",
+      "name": "Send Booking Confirmation on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        160
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Hi {{ $json.inviteeName }}, your {{ $json.brandName }} session ({{ $json.eventName }}) is booked for {{ $json.startTimeFormatted }}. Meeting link: {{ $json.joinUrl }} Need to adjust? Reschedule here: {{ $json.rescheduleUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000016",
+      "name": "Log Scheduled Booking in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Invitee and Phone').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $('Normalize Invitee and Phone').item.json.bookingId }}",
+            "eventName": "={{ $('Normalize Invitee and Phone').item.json.eventName }}",
+            "inviteeName": "={{ $('Normalize Invitee and Phone').item.json.inviteeName }}",
+            "email": "={{ $('Normalize Invitee and Phone').item.json.inviteeEmail }}",
+            "phone": "={{ $('Normalize Invitee and Phone').item.json.cleanPhone }}",
+            "startTimeIso": "={{ $('Normalize Invitee and Phone').item.json.startTimeIso }}",
+            "startTimeFormatted": "={{ $('Normalize Invitee and Phone').item.json.startTimeFormatted }}",
+            "joinUrl": "={{ $('Normalize Invitee and Phone').item.json.joinUrl }}",
+            "rescheduleUrl": "={{ $('Normalize Invitee and Phone').item.json.rescheduleUrl }}",
+            "cancelUrl": "={{ $('Normalize Invitee and Phone').item.json.cancelUrl }}",
+            "pollDueAt": "={{ $('Normalize Invitee and Phone').item.json.pollDueAt }}",
+            "finalReminderDueAt": "={{ $('Normalize Invitee and Phone').item.json.finalReminderDueAt }}",
+            "status": "Scheduled",
+            "pollSent": "No",
+            "finalReminderSent": "No",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000017",
+      "name": "Send Cancellation Notice on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        576
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.cleanPhone }}",
+        "message": "=Hi {{ $json.inviteeName }}, your {{ $json.brandName }} session ({{ $json.eventName }}) has been canceled. Whenever you are ready to pick a new time, book here: {{ $json.rebookingUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000018",
+      "name": "Mark Booking Canceled in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        576
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Invitee and Phone').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $('Normalize Invitee and Phone').item.json.bookingId }}",
+            "status": "Canceled",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000019",
+      "name": "Notify Host of Cancellation in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1648,
+        576
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Normalize Invitee and Phone').item.json.slackHostChannelId }}"
+        },
+        "text": "={{ 'Calendly meeting canceled\\nEvent: ' + $('Normalize Invitee and Phone').item.json.eventName + '\\nInvitee: ' + $('Normalize Invitee and Phone').item.json.inviteeName + ' (+' + $('Normalize Invitee and Phone').item.json.cleanPhone + ')\\nOriginal time: ' + $('Normalize Invitee and Phone').item.json.startTimeFormatted }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000020",
+      "name": "Hourly Reminder and Poll Sweep",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1184
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000021",
+      "name": "Sweep Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        1184
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "brandName",
+              "value": "Acme Advisory",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000022",
+      "name": "Read Calendly Bookings Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        1184
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000023",
+      "name": "Classify Due Polls and Final Nudges",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        1184
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Sweep Configuration').first().json || {};\nconst now = Date.now();\nconst actions = [];\nfor (const item of $input.all()) {\n  const row = item.json;\n  if (!row || !row.bookingId || !row.phone) continue;\n  const startMs = Date.parse(String(row.startTimeIso || ''));\n  if (!Number.isFinite(startMs) || startMs <= now) continue;\n  const pollMs = Date.parse(String(row.pollDueAt || ''));\n  const finalMs = Date.parse(String(row.finalReminderDueAt || ''));\n  if (row.status === 'Scheduled' && row.pollSent !== 'Yes' && Number.isFinite(pollMs) && pollMs <= now) {\n    actions.push({ json: { ...row, reminderAction: 'send_poll', brandName: cfg.brandName, spreadsheetId: cfg.spreadsheetId } });\n  } else if ((row.status === 'Scheduled' || row.status === 'Confirmed') && row.finalReminderSent !== 'Yes' && Number.isFinite(finalMs) && finalMs <= now) {\n    actions.push({ json: { ...row, reminderAction: 'send_final', brandName: cfg.brandName, spreadsheetId: cfg.spreadsheetId } });\n  }\n}\nreturn actions;"
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000024",
+      "name": "Route Reminder Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        1184
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "a-poll",
+                    "leftValue": "={{ $json.reminderAction }}",
+                    "rightValue": "send_poll",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "24h Attendance Poll"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "a-final",
+                    "leftValue": "={{ $json.reminderAction }}",
+                    "rightValue": "send_final",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2h Final Join Link"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000025",
+      "name": "Send 24h Attendance Poll",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        992
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $json.phone }}",
+        "name": "=Quick check for your {{ $json.brandName }} session ({{ $json.eventName }}) on {{ $json.startTimeFormatted }} — still good to make it?",
+        "options": "I will be there, Need to reschedule, Cancel meeting"
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000026",
+      "name": "Save Poll Message ID in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        992
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Classify Due Polls and Final Nudges').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $('Classify Due Polls and Final Nudges').item.json.bookingId }}",
+            "pollSent": "Yes",
+            "pollMessageId": "={{ $json.messageId || $json.id || '' }}",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000027",
+      "name": "Send 2h Join Link on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        1376
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.phone }}",
+        "message": "=See you soon {{ $json.inviteeName }}! Your {{ $json.brandName }} session ({{ $json.eventName }}) starts in about 2 hours. Join link: {{ $json.joinUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000028",
+      "name": "Mark Final Nudge Sent in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        1376
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Classify Due Polls and Final Nudges').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $('Classify Due Polls and Final Nudges').item.json.bookingId }}",
+            "finalReminderSent": "Yes",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000030",
+      "name": "When Invitee Votes on Attendance Poll",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2176
+      ],
+      "webhookId": "c6060006-6666-4666-8666-300000000030",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "vote"
+        ],
+        "onlyIncoming": true
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000031",
+      "name": "Vote Handler Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        2176
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "brandName",
+              "value": "Acme Advisory",
+              "type": "string"
+            },
+            {
+              "id": "v2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "v3",
+              "name": "slackHostChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000032",
+      "name": "Lookup Booking by Poll Message ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        2176
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "pollMessageId",
+              "lookupValue": "={{ $('When Invitee Votes on Attendance Poll').item.json.messageId }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000033",
+      "name": "Validate Attendance Vote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        2176
+      ],
+      "parameters": {
+        "jsCode": "const row = $input.first()?.json;\nif (!row || !row.bookingId || row.status !== 'Scheduled') return [];\nconst ev = $('When Invitee Votes on Attendance Poll').first().json || {};\nconst cfg = $('Vote Handler Configuration').first().json || {};\nconst selected = ev.vote?.selectedOptionIndices;\nif (!Array.isArray(selected) || selected.length === 0) return [];\nconst idx = Number(selected[0]);\nif (idx < 0 || idx > 2) return [];\nconst choices = ['confirmed', 'reschedule', 'cancel'];\nreturn [{\n  json: {\n    ...row,\n    chatId: String(ev.chat?.id || row.phone),\n    choice: choices[idx],\n    brandName: cfg.brandName,\n    spreadsheetId: cfg.spreadsheetId,\n    slackHostChannelId: cfg.slackHostChannelId,\n  },\n}];"
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000034",
+      "name": "Route Attendance Vote",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        2176
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "c-conf",
+                    "leftValue": "={{ $json.choice }}",
+                    "rightValue": "confirmed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Confirmed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "c-resch",
+                    "leftValue": "={{ $json.choice }}",
+                    "rightValue": "reschedule",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reschedule"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "c-canc",
+                    "leftValue": "={{ $json.choice }}",
+                    "rightValue": "cancel",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cancel"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000035",
+      "name": "Mark Invitee Confirmed in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        1792
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $json.bookingId }}",
+            "status": "Confirmed",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000036",
+      "name": "Send Confirmed Reply on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1792
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Attendance Vote').item.json.chatId }}",
+        "message": "=Awesome, we have you confirmed for {{ $('Validate Attendance Vote').item.json.eventName }} on {{ $('Validate Attendance Vote').item.json.startTimeFormatted }}! We will drop the meeting link here 2 hours before we start.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000037",
+      "name": "Mark Reschedule Requested in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        2176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $json.bookingId }}",
+            "status": "Reschedule Requested",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000038",
+      "name": "Send Calendly Reschedule Link",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        2176
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Attendance Vote').item.json.chatId }}",
+        "message": "=No problem! Pick a new time that works better for your {{ $('Validate Attendance Vote').item.json.eventName }} here: {{ $('Validate Attendance Vote').item.json.rescheduleUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000039",
+      "name": "Alert Host of Reschedule in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1648,
+        2176
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate Attendance Vote').item.json.slackHostChannelId }}"
+        },
+        "text": "={{ 'Invitee requested reschedule via WhatsApp poll\\nEvent: ' + $('Validate Attendance Vote').item.json.eventName + '\\nInvitee: ' + $('Validate Attendance Vote').item.json.inviteeName + ' (+' + $('Validate Attendance Vote').item.json.phone + ')\\nOriginal time: ' + $('Validate Attendance Vote').item.json.startTimeFormatted }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000040",
+      "name": "Mark Cancel Requested in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        2560
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CalendlyBookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bookingId": "={{ $json.bookingId }}",
+            "status": "Cancel Requested",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "bookingId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000041",
+      "name": "Send Calendly Cancel Link",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        2560
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Validate Attendance Vote').item.json.chatId }}",
+        "message": "=Thanks for letting us know ahead of time. Tap here to release your slot in Calendly: {{ $('Validate Attendance Vote').item.json.cancelUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000042",
+      "name": "Alert Host of Cancel in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1648,
+        2560
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate Attendance Vote').item.json.slackHostChannelId }}"
+        },
+        "text": "={{ 'Invitee tapped Cancel on WhatsApp attendance poll\\nEvent: ' + $('Validate Attendance Vote').item.json.eventName + '\\nInvitee: ' + $('Validate Attendance Vote').item.json.inviteeName + ' (+' + $('Validate Attendance Vote').item.json.phone + ')\\nSlot: ' + $('Validate Attendance Vote').item.json.startTimeFormatted }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000050",
+      "name": "On Calendly Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2976
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "c6060006-6666-4666-8666-000000000051",
+      "name": "Alert Ops on Error in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        208,
+        2976
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SET_SLACK_CHANNEL_ID"
+        },
+        "text": "={{ 'Calendly WhatsApp No-Show workflow failed\\nWorkflow: ' + ($json.workflow?.name || 'Unknown') + '\\nNode: ' + ($json.execution?.lastNodeExecuted || 'Unknown') + '\\nError: ' + ($json.execution?.error?.message || 'No message') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On Calendly Booking Event": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Calendly Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Calendly Events": {
+      "main": [
+        [
+          {
+            "node": "Booking Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Configuration": {
+      "main": [
+        [
+          {
+            "node": "Normalize Invitee and Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Invitee and Phone": {
+      "main": [
+        [
+          {
+            "node": "Is Booking Created or Canceled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Booking Created or Canceled?": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Confirmation on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Cancellation Notice on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Booking Confirmation on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Scheduled Booking in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Cancellation Notice on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark Booking Canceled in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Booking Canceled in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Notify Host of Cancellation in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly Reminder and Poll Sweep": {
+      "main": [
+        [
+          {
+            "node": "Sweep Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sweep Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read Calendly Bookings Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Calendly Bookings Sheet": {
+      "main": [
+        [
+          {
+            "node": "Classify Due Polls and Final Nudges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Due Polls and Final Nudges": {
+      "main": [
+        [
+          {
+            "node": "Route Reminder Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Reminder Action": {
+      "main": [
+        [
+          {
+            "node": "Send 24h Attendance Poll",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send 2h Join Link on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send 24h Attendance Poll": {
+      "main": [
+        [
+          {
+            "node": "Save Poll Message ID in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send 2h Join Link on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark Final Nudge Sent in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Invitee Votes on Attendance Poll": {
+      "main": [
+        [
+          {
+            "node": "Vote Handler Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vote Handler Configuration": {
+      "main": [
+        [
+          {
+            "node": "Lookup Booking by Poll Message ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Booking by Poll Message ID": {
+      "main": [
+        [
+          {
+            "node": "Validate Attendance Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Attendance Vote": {
+      "main": [
+        [
+          {
+            "node": "Route Attendance Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Attendance Vote": {
+      "main": [
+        [
+          {
+            "node": "Mark Invitee Confirmed in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Reschedule Requested in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Cancel Requested in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Invitee Confirmed in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmed Reply on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reschedule Requested in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Calendly Reschedule Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Calendly Reschedule Link": {
+      "main": [
+        [
+          {
+            "node": "Alert Host of Reschedule in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Cancel Requested in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Calendly Cancel Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Calendly Cancel Link": {
+      "main": [
+        [
+          {
+            "node": "Alert Host of Cancel in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Calendly Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops on Error in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Calendly"
+    },
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "Scheduling"
+    },
+    {
+      "name": "Supergreen"
+    }
+  ]
+}
