@@ -1,0 +1,1437 @@
+{
+  "name": "Qualify Typeform Leads with WhatsApp Polls, HubSpot CRM and Slack via Supergreen",
+  "nodes": [
+    {
+      "id": "d7070007-7777-4777-8777-000000000001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        160
+      ],
+      "parameters": {
+        "content": "## Qualify Typeform leads instantly with WhatsApp polls, HubSpot CRM and Slack\n\n### How it works\n\n1. Captures new Typeform lead submissions in real time, deduplicates webhook retries, and upserts the contact in HubSpot CRM.\n2. Immediately sends a native 3-option WhatsApp qualification poll via Supergreen (no Meta template approvals or per-message fees) and stores the `pollMessageId` in Google Sheets.\n3. Listens for live poll votes to automatically promote urgent buyers to Sales Qualified Lead in HubSpot, reply with a fast-track booking link on WhatsApp, and alert your sales team in Slack.\n4. Routes 30-day buyers and early researchers to tailored WhatsApp follow-ups and HubSpot lifecycle stages without noisy sales pings.\n5. Runs a daily 09:00 sweep to send one polite 24-hour WhatsApp follow-up to leads who have not voted yet, and posts workflow errors to Slack.\n\n### Setup steps\n\n- [ ] Install the `n8n-nodes-supergreen` community node and connect your WhatsApp number at [supergreen.cc/n8n](https://supergreen.cc/n8n?utm_source=n8n&utm_medium=template&utm_campaign=typeform-hubspot-whatsapp-polls).\n- [ ] Connect credentials for **Typeform OAuth2**, **HubSpot App Token**, **Supergreen API**, **Google Sheets OAuth2**, and **Slack OAuth2**.\n- [ ] Select your Typeform lead form containing Email, Phone / WhatsApp, Name, and optional Company / Need fields.\n- [ ] Create a Google Sheet with a `Leads` tab containing columns: `leadId`, `email`, `fullName`, `companyName`, `phone`, `useCase`, `pollMessageId`, `qualification`, `nudgeDueAt`, `nudgeSent`, `updatedAt`.\n- [ ] Replace `SET_TYPEFORM_FORM_ID`, `SET_GOOGLE_SHEET_ID`, `SET_SLACK_CHANNEL_ID`, your brand name, `bookingUrl`, and `guideUrl` in the configuration and error nodes.\n\n### Customization\n\nEdit the 3 poll choices to qualify by budget or team size instead of timeline, adjust `nudgeHours` (default 24), or swap Typeform for Tally, Jotform, or Webflow forms.",
+        "width": 480,
+        "height": 960
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000002",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        240
+      ],
+      "parameters": {
+        "content": "## 1. Capture and normalize Typeform leads\n\nListens for new Typeform submissions, deduplicates webhook retries, extracts contact details and WhatsApp numbers, and schedules a 24h follow-up timestamp.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000003",
+      "name": "Sticky Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        160
+      ],
+      "parameters": {
+        "content": "## 2. Sync new lead into HubSpot CRM\n\nUpserts the lead by email in HubSpot with phone, company, use case, and initial NEW lead status.",
+        "width": 256,
+        "height": 368,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000004",
+      "name": "Sticky Note 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        176
+      ],
+      "parameters": {
+        "content": "## 3. Send instant WhatsApp qualification poll\n\nSends a 3-option timeline poll on WhatsApp via Supergreen and saves pollMessageId to Google Sheets to match live votes.",
+        "width": 400,
+        "height": 352,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000005",
+      "name": "Sticky Note 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        1168
+      ],
+      "parameters": {
+        "content": "## 4. Match poll vote to lead record\n\nListens for Supergreen poll vote webhooks and retrieves the matching lead row by pollMessageId in Google Sheets.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000006",
+      "name": "Sticky Note 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        1136
+      ],
+      "parameters": {
+        "content": "## 5. Score vote and route lead tier\n\nIgnores unvotes or already-qualified leads and splits respondents into Hot, Warm, and Nurture paths.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000007",
+      "name": "Sticky Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        784
+      ],
+      "parameters": {
+        "content": "## 6. Fast-track hot SQL and alert sales\n\nPromotes urgent leads to Sales Qualified Lead in HubSpot, sends a priority booking link on WhatsApp, updates the ledger, and pings Slack.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000008",
+      "name": "Sticky Note 7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1168
+      ],
+      "parameters": {
+        "content": "## 7. Engage warm 30-day MQL\n\nUpdates HubSpot to Marketing Qualified Lead, shares both the buyer guide and demo booking link on WhatsApp, and updates Sheets.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000009",
+      "name": "Sticky Note 8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1552
+      ],
+      "parameters": {
+        "content": "## 8. Nurture early-stage researcher\n\nKeeps HubSpot status clean as an open lead and delivers a self-serve guide on WhatsApp without interrupting sales reps.",
+        "width": 608,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000010",
+      "name": "Sticky Note 9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2064
+      ],
+      "parameters": {
+        "content": "## 9. Find unanswered leads after 24h\n\nRuns daily at 09:00 to locate pending leads who have not voted on the qualification poll within 24 hours.",
+        "width": 816,
+        "height": 304,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000011",
+      "name": "Sticky Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        2032
+      ],
+      "parameters": {
+        "content": "## 10. Send gentle WhatsApp nudge\n\nSends one polite WhatsApp follow-up with the direct booking link and marks nudgeSent so leads are never spammed.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000012",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        2448
+      ],
+      "parameters": {
+        "content": "## 11. Alert RevOps on workflow errors\n\nCaptures unhandled execution failures via Error Trigger and posts the failing node and error details to Slack.",
+        "width": 400,
+        "height": 320,
+        "color": 7
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000010",
+      "name": "On Typeform Lead Submitted",
+      "type": "n8n-nodes-base.typeformTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        368
+      ],
+      "webhookId": "d7070007-7777-4777-8777-100000000010",
+      "credentials": {
+        "typeformOAuth2Api": {
+          "id": "typeform-cred",
+          "name": "Typeform OAuth2"
+        }
+      },
+      "parameters": {
+        "authentication": "oAuth2",
+        "formId": "SET_TYPEFORM_FORM_ID",
+        "simplifyAnswers": true,
+        "onlyAnswers": false
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000011",
+      "name": "Deduplicate Form Submissions",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        208,
+        368
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ String($json.event_id || $json.form_response?.token || $json.submitted_at || '') }}",
+        "options": {
+          "scope": "node",
+          "historySize": 5000
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000012",
+      "name": "Lead Routing Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        368
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "companyBrand",
+              "value": "Acme Solutions",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "slackSalesChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "bookingUrl",
+              "value": "https://cal.com/your-sales-team/demo",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "guideUrl",
+              "value": "https://example.com/buyer-guide",
+              "type": "string"
+            },
+            {
+              "id": "c6",
+              "name": "nudgeHours",
+              "value": 24,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000013",
+      "name": "Normalize Lead and Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        368
+      ],
+      "parameters": {
+        "jsCode": "const raw = $('On Typeform Lead Submitted').first().json || {};\nconst cfg = $('Lead Routing Configuration').first().json || {};\nconst answers = raw.form_response?.answers || raw;\nconst findField = (re) => {\n  for (const [k, v] of Object.entries(answers)) {\n    if (re.test(k) && v !== null && v !== undefined && String(v).trim()) return String(v).trim();\n  }\n  return '';\n};\nconst email = findField(/email/i);\nconst rawPhone = findField(/phone|whatsapp|mobile/i);\nconst cleanPhone = rawPhone.replace(/\\\\D/g, '');\nif (!email || cleanPhone.length < 8) return [];\nconst fullName = findField(/name/i) || 'there';\nconst parts = fullName.split(/\\\\s+/);\nconst firstName = parts[0] || 'there';\nconst lastName = parts.slice(1).join(' ');\nconst companyName = findField(/company|organization|business/i);\nconst useCase = findField(/need|goal|project|help|message/i);\nconst leadId = String(raw.form_response?.token || raw.event_id || cleanPhone);\nconst nudgeDueAt = new Date(Date.now() + Number(cfg.nudgeHours || 24) * 3600 * 1000).toISOString();\nreturn [{\n  json: {\n    leadId,\n    email,\n    firstName,\n    lastName,\n    fullName,\n    companyName,\n    useCase,\n    cleanPhone,\n    nudgeDueAt,\n    companyBrand: cfg.companyBrand,\n    spreadsheetId: cfg.spreadsheetId,\n    slackSalesChannelId: cfg.slackSalesChannelId,\n    bookingUrl: cfg.bookingUrl,\n    guideUrl: cfg.guideUrl,\n  },\n}];"
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000014",
+      "name": "Upsert Lead in HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        928,
+        368
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "hubspot-cred",
+          "name": "HubSpot App Token"
+        }
+      },
+      "parameters": {
+        "authentication": "appToken",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "firstName": "={{ $json.firstName }}",
+          "lastName": "={{ $json.lastName }}",
+          "phoneNumber": "={{ '+' + $json.cleanPhone }}",
+          "companyName": "={{ $json.companyName }}",
+          "leadStatus": "NEW",
+          "lifeCycleStage": "lead",
+          "message": "={{ $json.useCase }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000015",
+      "name": "Send WhatsApp Qualification Poll",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        368
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "poll",
+        "operation": "sendPoll",
+        "toNumber": "={{ $('Normalize Lead and Phone').item.json.cleanPhone }}",
+        "name": "=Hi {{ $('Normalize Lead and Phone').item.json.firstName }}, thanks for reaching out to {{ $('Normalize Lead and Phone').item.json.companyBrand }}! How soon are you looking to get started?",
+        "options": "This week (urgent), Within 30 days, Just researching"
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000016",
+      "name": "Log Lead and Poll ID in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        368
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Normalize Lead and Phone').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leadId": "={{ $('Normalize Lead and Phone').item.json.leadId }}",
+            "email": "={{ $('Normalize Lead and Phone').item.json.email }}",
+            "fullName": "={{ $('Normalize Lead and Phone').item.json.fullName }}",
+            "companyName": "={{ $('Normalize Lead and Phone').item.json.companyName }}",
+            "phone": "={{ $('Normalize Lead and Phone').item.json.cleanPhone }}",
+            "useCase": "={{ $('Normalize Lead and Phone').item.json.useCase }}",
+            "pollMessageId": "={{ $json.messageId || $json.id || '' }}",
+            "qualification": "Pending",
+            "nudgeDueAt": "={{ $('Normalize Lead and Phone').item.json.nudgeDueAt }}",
+            "nudgeSent": "No",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "leadId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000020",
+      "name": "When Lead Votes on Qualification Poll",
+      "type": "n8n-nodes-supergreen.supergreenTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1296
+      ],
+      "webhookId": "d7070007-7777-4777-8777-200000000020",
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "network": "whatsapp",
+        "events": [
+          "vote"
+        ],
+        "onlyIncoming": true
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000021",
+      "name": "Vote Routing Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        1296
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "companyBrand",
+              "value": "Acme Solutions",
+              "type": "string"
+            },
+            {
+              "id": "v2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "v3",
+              "name": "slackSalesChannelId",
+              "value": "SET_SLACK_CHANNEL_ID",
+              "type": "string"
+            },
+            {
+              "id": "v4",
+              "name": "bookingUrl",
+              "value": "https://cal.com/your-sales-team/demo",
+              "type": "string"
+            },
+            {
+              "id": "v5",
+              "name": "guideUrl",
+              "value": "https://example.com/buyer-guide",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000022",
+      "name": "Lookup Lead by Poll Message ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        1296
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "pollMessageId",
+              "lookupValue": "={{ $('When Lead Votes on Qualification Poll').item.json.messageId }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000023",
+      "name": "Score Qualification Vote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        1296
+      ],
+      "parameters": {
+        "jsCode": "const row = $input.first()?.json;\nif (!row || !row.leadId || row.qualification !== 'Pending') return [];\nconst ev = $('When Lead Votes on Qualification Poll').first().json || {};\nconst cfg = $('Vote Routing Configuration').first().json || {};\nconst selected = ev.vote?.selectedOptionIndices;\nif (!Array.isArray(selected) || selected.length === 0) return [];\nconst idx = Number(selected[0]);\nif (idx < 0 || idx > 2) return [];\nconst tiers = ['hot', 'warm', 'nurture'];\nreturn [{\n  json: {\n    ...row,\n    chatId: String(ev.chat?.id || row.phone),\n    tier: tiers[idx],\n    companyBrand: cfg.companyBrand,\n    spreadsheetId: cfg.spreadsheetId,\n    slackSalesChannelId: cfg.slackSalesChannelId,\n    bookingUrl: cfg.bookingUrl,\n    guideUrl: cfg.guideUrl,\n  },\n}];"
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000024",
+      "name": "Route Lead Qualification Tier",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        1296
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "t-hot",
+                    "leftValue": "={{ $json.tier }}",
+                    "rightValue": "hot",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Hot Lead"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "t-warm",
+                    "leftValue": "={{ $json.tier }}",
+                    "rightValue": "warm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Warm Lead"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "t-nurture",
+                    "leftValue": "={{ $json.tier }}",
+                    "rightValue": "nurture",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Nurture"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000025",
+      "name": "Mark Hot SQL in HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1232,
+        912
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "hubspot-cred",
+          "name": "HubSpot App Token"
+        }
+      },
+      "parameters": {
+        "authentication": "appToken",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "leadStatus": "IN_PROGRESS",
+          "lifeCycleStage": "salesqualifiedlead"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000026",
+      "name": "Send Fast-Track Booking Link",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        912
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Score Qualification Vote').item.json.chatId }}",
+        "message": "=Great — we have priority slots open this week! Grab a quick 15-minute call here so we can get {{ $('Score Qualification Vote').item.json.companyName || 'you' }} moving: {{ $('Score Qualification Vote').item.json.bookingUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000027",
+      "name": "Update Hot Lead in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1648,
+        912
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Score Qualification Vote').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leadId": "={{ $('Score Qualification Vote').item.json.leadId }}",
+            "qualification": "Hot (This Week)",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "leadId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000028",
+      "name": "Alert Sales of Hot Lead in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1856,
+        912
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Score Qualification Vote').item.json.slackSalesChannelId }}"
+        },
+        "text": "={{ 'Hot WhatsApp-qualified lead (ready this week)\\nName: ' + $('Score Qualification Vote').item.json.fullName + '\\nCompany: ' + ($('Score Qualification Vote').item.json.companyName || 'N/A') + '\\nEmail: ' + $('Score Qualification Vote').item.json.email + '\\nPhone: +' + $('Score Qualification Vote').item.json.phone + '\\nNeed: ' + ($('Score Qualification Vote').item.json.useCase || 'See HubSpot') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000029",
+      "name": "Mark Warm MQL in HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1232,
+        1296
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "hubspot-cred",
+          "name": "HubSpot App Token"
+        }
+      },
+      "parameters": {
+        "authentication": "appToken",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "leadStatus": "OPEN_DEAL",
+          "lifeCycleStage": "marketingqualifiedlead"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000030",
+      "name": "Send Demo and Guide on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1296
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Score Qualification Vote').item.json.chatId }}",
+        "message": "=Sounds good! Here is our quick overview guide ({{ $('Score Qualification Vote').item.json.guideUrl }}), and whenever you are ready to walk through it live, pick a time here: {{ $('Score Qualification Vote').item.json.bookingUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000031",
+      "name": "Update Warm Lead in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1648,
+        1296
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Score Qualification Vote').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leadId": "={{ $('Score Qualification Vote').item.json.leadId }}",
+            "qualification": "Warm (30 Days)",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "leadId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000032",
+      "name": "Mark Nurture Lead in HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1232,
+        1680
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "hubspot-cred",
+          "name": "HubSpot App Token"
+        }
+      },
+      "parameters": {
+        "authentication": "appToken",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "leadStatus": "OPEN",
+          "lifeCycleStage": "lead"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000033",
+      "name": "Send Self-Serve Guide on WhatsApp",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1680
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $('Score Qualification Vote').item.json.chatId }}",
+        "message": "=No rush at all! Here is our buyer guide so you can explore at your own pace: {{ $('Score Qualification Vote').item.json.guideUrl }} — just reply here anytime if questions come up.",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000034",
+      "name": "Update Nurture Lead in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1648,
+        1680
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Score Qualification Vote').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leadId": "={{ $('Score Qualification Vote').item.json.leadId }}",
+            "qualification": "Nurture",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "leadId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000040",
+      "name": "Daily Unanswered Lead Sweep",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        2192
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000041",
+      "name": "Follow-Up Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        2192
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "companyBrand",
+              "value": "Acme Solutions",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "spreadsheetId",
+              "value": "SET_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "f3",
+              "name": "bookingUrl",
+              "value": "https://cal.com/your-sales-team/demo",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000042",
+      "name": "Read Lead Ledger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        2192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000043",
+      "name": "Filter Pending Leads Past 24h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        2192
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Follow-Up Configuration').first().json || {};\nconst now = Date.now();\nconst due = [];\nfor (const item of $input.all()) {\n  const row = item.json;\n  if (!row || !row.leadId || !row.phone) continue;\n  if (row.qualification !== 'Pending' || row.nudgeSent === 'Yes') continue;\n  const dueMs = Date.parse(String(row.nudgeDueAt || ''));\n  if (Number.isFinite(dueMs) && dueMs <= now) {\n    due.push({ json: { ...row, companyBrand: cfg.companyBrand, spreadsheetId: cfg.spreadsheetId, bookingUrl: cfg.bookingUrl } });\n  }\n}\nreturn due;"
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000044",
+      "name": "Send 24h WhatsApp Follow-Up",
+      "type": "n8n-nodes-supergreen.supergreen",
+      "typeVersion": 1,
+      "position": [
+        928,
+        2192
+      ],
+      "credentials": {
+        "supergreenApi": {
+          "id": "supergreen-cred",
+          "name": "Supergreen API"
+        }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toNumber": "={{ $json.phone }}",
+        "message": "=Hey {{ $json.fullName }}, quick follow-up from {{ $json.companyBrand }}! Tap an option on the poll above or grab a time directly here whenever you are ready: {{ $json.bookingUrl }}",
+        "additionalFields": {
+          "linkPreview": true
+        }
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000045",
+      "name": "Mark Follow-Up Sent in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        2192
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheets-cred",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Filter Pending Leads Past 24h').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leadId": "={{ $('Filter Pending Leads Past 24h').item.json.leadId }}",
+            "nudgeSent": "Yes",
+            "updatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "leadId"
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000050",
+      "name": "On Lead Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2608
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "d7070007-7777-4777-8777-000000000051",
+      "name": "Alert RevOps on Error in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        208,
+        2608
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-cred",
+          "name": "Slack OAuth2"
+        }
+      },
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SET_SLACK_CHANNEL_ID"
+        },
+        "text": "={{ 'Typeform HubSpot WhatsApp workflow failed\\nWorkflow: ' + ($json.workflow?.name || 'Unknown') + '\\nNode: ' + ($json.execution?.lastNodeExecuted || 'Unknown') + '\\nError: ' + ($json.execution?.error?.message || 'No message') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On Typeform Lead Submitted": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Form Submissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Form Submissions": {
+      "main": [
+        [
+          {
+            "node": "Lead Routing Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Routing Configuration": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead and Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead and Phone": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead in HubSpot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead in HubSpot": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Qualification Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Qualification Poll": {
+      "main": [
+        [
+          {
+            "node": "Log Lead and Poll ID in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Lead Votes on Qualification Poll": {
+      "main": [
+        [
+          {
+            "node": "Vote Routing Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vote Routing Configuration": {
+      "main": [
+        [
+          {
+            "node": "Lookup Lead by Poll Message ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Lead by Poll Message ID": {
+      "main": [
+        [
+          {
+            "node": "Score Qualification Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Qualification Vote": {
+      "main": [
+        [
+          {
+            "node": "Route Lead Qualification Tier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Lead Qualification Tier": {
+      "main": [
+        [
+          {
+            "node": "Mark Hot SQL in HubSpot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Warm MQL in HubSpot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Nurture Lead in HubSpot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Hot SQL in HubSpot": {
+      "main": [
+        [
+          {
+            "node": "Send Fast-Track Booking Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Fast-Track Booking Link": {
+      "main": [
+        [
+          {
+            "node": "Update Hot Lead in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Hot Lead in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Alert Sales of Hot Lead in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Warm MQL in HubSpot": {
+      "main": [
+        [
+          {
+            "node": "Send Demo and Guide on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Demo and Guide on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Update Warm Lead in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Nurture Lead in HubSpot": {
+      "main": [
+        [
+          {
+            "node": "Send Self-Serve Guide on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Self-Serve Guide on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Update Nurture Lead in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Unanswered Lead Sweep": {
+      "main": [
+        [
+          {
+            "node": "Follow-Up Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-Up Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read Lead Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Lead Ledger": {
+      "main": [
+        [
+          {
+            "node": "Filter Pending Leads Past 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Pending Leads Past 24h": {
+      "main": [
+        [
+          {
+            "node": "Send 24h WhatsApp Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send 24h WhatsApp Follow-Up": {
+      "main": [
+        [
+          {
+            "node": "Mark Follow-Up Sent in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Lead Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Alert RevOps on Error in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Typeform"
+    },
+    {
+      "name": "HubSpot"
+    },
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "CRM"
+    },
+    {
+      "name": "Supergreen"
+    }
+  ]
+}
